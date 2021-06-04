@@ -8,3 +8,4 @@ extern "C" void KernelMain(uint64_t frame_buffer_base,
   }
   while (1) __asm__("hlt");
 }
+
