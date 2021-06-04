@@ -21,9 +21,22 @@ EUFI-OS-build の手順に沿って開発ツールを導入した後、devenv/bu
 
 ```
 $ cd kernel 
+```
 
+build.shが失敗した場合↓
+
+```
 $ clang++ -O2 -Wall -g --target=x86_64-elf -ffreestanding -mno-red-zone -fno-exceptions -fno-rtti -std=c++17 -c main.cpp
+```
 
+build.shが成功した場合↓
+
+```
+clang++ -O2 $CPPFLAG --target=x86_64-elf -fno-exceptions -ffreestanding -c main.cpp
+```
+
+リンク
+```
 $ ld.lld --entry KernelMain -z norelro --image-base 0x100000 --static -o kernel.elf main.o
 ```
 
