@@ -10,7 +10,7 @@
 #include  <Protocol/BlockIo.h>
 #include  <Guid/FileInfo.h>
 #include  "../kernel/frame_buffer_config.hpp"
-#include  "elf.hpp"
+#include  "../kernel/elf.hpp"
 
 struct MemoryMap {
   UINTN buffer_size;
