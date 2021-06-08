@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <cstdio>
+#include <stdio.h>
 
 // #@@range_begin(includes)
 #include "frame_buffer_config.hpp"
