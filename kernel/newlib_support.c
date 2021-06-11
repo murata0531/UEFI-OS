@@ -1,7 +1,5 @@
-#include <sys/types.h>
-#include <stddef.h>
-#include <stdio.h>
 #include <errno.h>
+#include <sys/types.h>
 
 void _exit(void) {
   while (1) __asm__("hlt");
