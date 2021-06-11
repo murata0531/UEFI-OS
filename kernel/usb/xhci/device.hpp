@@ -1,5 +1,5 @@
 /**
- * @file usb/xhci/device.hpp
+ * @file usb/xhci/device.hpp 
  *
  * USB デバイスを表すクラスと関連機能．
  */
