@@ -1,12 +1,10 @@
 #pragma once
 
-// #@@range_begin(pixel_color_def)
 #include "frame_buffer_config.hpp"
 
 struct PixelColor {
   uint8_t r, g, b;
 };
-// #@@range_end(pixel_color_def)
 
 class PixelWriter {
  public:
@@ -24,7 +22,6 @@ class PixelWriter {
   const FrameBufferConfig& config_;
 };
 
-// #@@range_begin(pixel_writer_def)
 class RGBResv8BitPerColorPixelWriter : public PixelWriter {
  public:
   using PixelWriter::PixelWriter;
@@ -36,4 +33,16 @@ class BGRResv8BitPerColorPixelWriter : public PixelWriter {
   using PixelWriter::PixelWriter;
   virtual void Write(int x, int y, const PixelColor& c) override;
 };
-// #@@range_end(pixel_writer_def)
+
+// #@@range_begin(vector2d)
+template <typename T>
+struct Vector2D {
+  T x, y;
+};
+// #@@range_end(vector2d)
+
+void DrawRectangle(PixelWriter& writer, const Vector2D<int>& pos,
+                   const Vector2D<int>& size, const PixelColor& c);
+
+void FillRectangle(PixelWriter& writer, const Vector2D<int>& pos,
+                   const Vector2D<int>& size, const PixelColor& c);
