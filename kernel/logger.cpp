@@ -1,7 +1,7 @@
 #include "logger.hpp"
 
-#include <stddef.h>
-#include <stdio.h>
+#include <cstddef>
+#include <cstdio>
 
 #include "console.hpp"
 

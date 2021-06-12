@@ -55,7 +55,6 @@ const CHAR16* GetMemoryTypeUnicode(EFI_MEMORY_TYPE type) {
     case EfiMaxMemoryType: return L"EfiMaxMemoryType";
     default: return L"InvalidMemoryType";
   }
-  
 }
 
 EFI_STATUS SaveMemoryMap(struct MemoryMap* map, EFI_FILE_PROTOCOL* file) {

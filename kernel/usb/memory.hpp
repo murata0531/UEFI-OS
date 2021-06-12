@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include <stddef.h>
+#include <cstddef>
 
 namespace usb {
   /** @brief 動的メモリ確保のためのメモリプールの最大容量（バイト） */

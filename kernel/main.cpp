@@ -4,9 +4,9 @@
  * カーネル本体のプログラムを書いたファイル．
  */
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdio.h>
+#include <cstdint>
+#include <cstddef>
+#include <cstdio>
 
 #include <numeric>
 #include <vector>

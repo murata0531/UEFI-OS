@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 #include <array>
 
 #include "error.hpp"

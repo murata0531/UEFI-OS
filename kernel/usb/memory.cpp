@@ -1,6 +1,6 @@
 #include "usb/memory.hpp"
 
-#include <stdint.h>
+#include <cstdint>
 
 namespace {
   template <class T>

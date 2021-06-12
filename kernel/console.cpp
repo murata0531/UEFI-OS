@@ -6,7 +6,7 @@
 
 #include "console.hpp"
 
-#include <string.h>
+#include <cstring>
 #include "font.hpp"
 
 Console::Console(PixelWriter& writer,
