@@ -45,6 +45,7 @@ $ ld.lld --entry KernelMain -z norelro --image-base 0x100000 --static -o kernel.
 ```
 $ cd kernel/
 
-$ ../tools/makefont.py -o hankaku.bin hankaku.txt
+$ python3 ../tools/makefont.py -o hankaku.bin hankaku.txt
 
 $ objcopy -I binary -O elf64-x86-64 -B i386:x86-64 hankaku.bin hankaku.o
+```
