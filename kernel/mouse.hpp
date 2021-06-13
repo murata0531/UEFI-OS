@@ -18,6 +18,3 @@ class MouseCursor {
  private:
   PixelWriter* pixel_writer_ = nullptr;
   PixelColor erase_color_;
-  Vector2D<int> position_;
-};
-// #@@range_end(mouse_class)
