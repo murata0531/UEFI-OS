@@ -11,9 +11,9 @@
 #include  <Guid/FileInfo.h>
 #include  "../kernel/frame_buffer_config.hpp"
 // #@@range_begin(include_map_header)
-#include  "memory_map.hpp"
+#include  "../kernel/memory_map.hpp"
 // #@@range_end(include_map_header)
-#include  "elf.hpp"
+#include  "../kernel/elf.hpp"
 
 EFI_STATUS GetMemoryMap(struct MemoryMap* map) {
   if (map->buffer == NULL) {
