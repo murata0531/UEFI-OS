@@ -10,16 +10,10 @@
 #include  <Protocol/BlockIo.h>
 #include  <Guid/FileInfo.h>
 #include  "../kernel/frame_buffer_config.hpp"
-#include  "../kernel/elf.hpp"
-
-struct MemoryMap {
-  UINTN buffer_size;
-  VOID* buffer;
-  UINTN map_size;
-  UINTN map_key;
-  UINTN descriptor_size;
-  UINT32 descriptor_version;
-};
+// #@@range_begin(include_map_header)
+#include  "memory_map.hpp"
+// #@@range_end(include_map_header)
+#include  "elf.hpp"
 
 EFI_STATUS GetMemoryMap(struct MemoryMap* map) {
   if (map->buffer == NULL) {
@@ -206,7 +200,7 @@ EFI_STATUS EFIAPI UefiMain(
     EFI_SYSTEM_TABLE* system_table) {
   EFI_STATUS status;
 
-  Print(L"Hello, Mikan World!\n");
+  Print(L"Hello, World!\n");
 
   CHAR8 memmap_buf[4096 * 4];
   struct MemoryMap memmap = {sizeof(memmap_buf), memmap_buf, 0, 0, 0, 0};
@@ -355,9 +349,12 @@ EFI_STATUS EFIAPI UefiMain(
       Halt();
   }
 
-  typedef void EntryPointType(const struct FrameBufferConfig*);
+  // #@@range_begin(pass_memory_map)
+  typedef void EntryPointType(const struct FrameBufferConfig*,
+                              const struct MemoryMap*);
   EntryPointType* entry_point = (EntryPointType*)entry_addr;
-  entry_point(&config);
+  entry_point(&config, &memmap);
+  // #@@range_end(pass_memory_map)
 
   Print(L"All done\n");
 
