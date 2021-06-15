@@ -33,9 +33,7 @@
 #include "window.hpp"
 #include "layer.hpp"
 
-// #@@range_begin(include_timer)
 #include "timer.hpp"
-// #@@range_end(include_timer)
 
 char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
 PixelWriter* pixel_writer;
@@ -61,7 +59,6 @@ BitmapMemoryManager* memory_manager;
 
 unsigned int mouse_layer_id;
 
-// #@@range_begin(mouse_observer)
 void MouseObserver(int8_t displacement_x, int8_t displacement_y) {
   layer_manager->MoveRelative(mouse_layer_id, {displacement_x, displacement_y});
   StartLAPICTimer();
@@ -70,7 +67,6 @@ void MouseObserver(int8_t displacement_x, int8_t displacement_y) {
   StopLAPICTimer();
   printk("MouseObserver: elapsed = %u\n", elapsed);
 }
-// #@@range_end(mouse_observer)
 
 void SwitchEhci2Xhci(const pci::Device& xhc_dev) {
   bool intel_ehc_exist = false;
@@ -134,12 +130,10 @@ extern "C" void KernelMainNewStack(
     kDesktopFGColor, kDesktopBGColor
   };
   console->SetWriter(pixel_writer);
-  // #@@range_begin(initialize_lapic_timer)
   printk("Welcome\n");
   SetLogLevel(kWarn);
 
   InitializeLAPICTimer();
-  // #@@range_end(initialize_lapic_timer)
 
   SetupSegments();
 
@@ -264,19 +258,28 @@ extern "C" void KernelMainNewStack(
   const int kFrameWidth = frame_buffer_config.horizontal_resolution;
   const int kFrameHeight = frame_buffer_config.vertical_resolution;
 
-  auto bgwindow = std::make_shared<Window>(kFrameWidth, kFrameHeight);
+  auto bgwindow = std::make_shared<Window>(
+      kFrameWidth, kFrameHeight, frame_buffer_config.pixel_format);
   auto bgwriter = bgwindow->Writer();
 
   DrawDesktop(*bgwriter);
   console->SetWriter(bgwriter);
 
   auto mouse_window = std::make_shared<Window>(
-      kMouseCursorWidth, kMouseCursorHeight);
+      kMouseCursorWidth, kMouseCursorHeight, frame_buffer_config.pixel_format);
   mouse_window->SetTransparentColor(kMouseTransparentColor);
   DrawMouseCursor(mouse_window->Writer(), {0, 0});
 
+  // #@@range_begin(create_screen)
+  FrameBuffer screen;
+  if (auto err = screen.Initialize(frame_buffer_config)) {
+    Log(kError, "failed to initialize frame buffer: %s at %s:%d\n",
+        err.Name(), err.File(), err.Line());
+  }
+
   layer_manager = new LayerManager;
-  layer_manager->SetWriter(pixel_writer);
+  layer_manager->SetWriter(&screen);
+  // #@@range_end(create_screen)
 
   auto bglayer_id = layer_manager->NewLayer()
     .SetWindow(bgwindow)
