@@ -33,6 +33,10 @@
 #include "window.hpp"
 #include "layer.hpp"
 
+// #@@range_begin(include_timer)
+#include "timer.hpp"
+// #@@range_end(include_timer)
+
 char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
 PixelWriter* pixel_writer;
 
@@ -55,14 +59,18 @@ int printk(const char* format, ...) {
 char memory_manager_buf[sizeof(BitmapMemoryManager)];
 BitmapMemoryManager* memory_manager;
 
-// #@@range_begin(layermgr_mousehandler)
 unsigned int mouse_layer_id;
 
+// #@@range_begin(mouse_observer)
 void MouseObserver(int8_t displacement_x, int8_t displacement_y) {
   layer_manager->MoveRelative(mouse_layer_id, {displacement_x, displacement_y});
+  StartLAPICTimer();
   layer_manager->Draw();
+  auto elapsed = LAPICTimerElapsed();
+  StopLAPICTimer();
+  printk("MouseObserver: elapsed = %u\n", elapsed);
 }
-// #@@range_end(layermgr_mousehandler)
+// #@@range_end(mouse_observer)
 
 void SwitchEhci2Xhci(const pci::Device& xhc_dev) {
   bool intel_ehc_exist = false;
@@ -120,16 +128,18 @@ extern "C" void KernelMainNewStack(
       break;
   }
 
-  // #@@range_begin(new_console)
   DrawDesktop(*pixel_writer);
 
   console = new(console_buf) Console{
     kDesktopFGColor, kDesktopBGColor
   };
   console->SetWriter(pixel_writer);
+  // #@@range_begin(initialize_lapic_timer)
   printk("Welcome\n");
   SetLogLevel(kWarn);
-  // #@@range_end(new_console)
+
+  InitializeLAPICTimer();
+  // #@@range_end(initialize_lapic_timer)
 
   SetupSegments();
 
@@ -164,7 +174,6 @@ extern "C" void KernelMainNewStack(
           desc->number_of_pages * kUEFIPageSize / kBytesPerFrame);
     }
   }
-  // #@@range_begin(initialize_heap)
   memory_manager->SetMemoryRange(FrameID{1}, FrameID{available_end / kBytesPerFrame});
 
   if (auto err = InitializeHeap(*memory_manager)) {
@@ -172,7 +181,6 @@ extern "C" void KernelMainNewStack(
         err.Name(), err.File(), err.Line());
     exit(1);
   }
-  // #@@range_end(initialize_heap)
 
   std::array<Message, 32> main_queue_data;
   ArrayQueue<Message> main_queue{main_queue_data};
@@ -253,7 +261,6 @@ extern "C" void KernelMainNewStack(
     }
   }
 
-  // #@@range_begin(main_window)
   const int kFrameWidth = frame_buffer_config.horizontal_resolution;
   const int kFrameHeight = frame_buffer_config.vertical_resolution;
 
@@ -283,7 +290,6 @@ extern "C" void KernelMainNewStack(
   layer_manager->UpDown(bglayer_id, 0);
   layer_manager->UpDown(mouse_layer_id, 1);
   layer_manager->Draw();
-  // #@@range_end(main_window)
 
   while (true) {
     __asm__("cli");
