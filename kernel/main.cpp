@@ -41,6 +41,7 @@ PixelWriter* pixel_writer;
 char console_buf[sizeof(Console)];
 Console* console;
 
+// #@@range_begin(measure_printk)
 int printk(const char* format, ...) {
   va_list ap;
   int result;
@@ -50,9 +51,16 @@ int printk(const char* format, ...) {
   result = vsprintf(s, format, ap);
   va_end(ap);
 
+  StartLAPICTimer();
+  console->PutString(s);
+  auto elapsed = LAPICTimerElapsed();
+  StopLAPICTimer();
+
+  sprintf(s, "[%9d]", elapsed);
   console->PutString(s);
   return result;
 }
+// #@@range_end(measure_printk)
 
 char memory_manager_buf[sizeof(BitmapMemoryManager)];
 BitmapMemoryManager* memory_manager;
@@ -130,7 +138,7 @@ extern "C" void KernelMainNewStack(
     kDesktopFGColor, kDesktopBGColor
   };
   console->SetWriter(pixel_writer);
-  printk("Welcome\n");
+  printk("Welcomen");
   SetLogLevel(kWarn);
 
   InitializeLAPICTimer();
@@ -270,7 +278,6 @@ extern "C" void KernelMainNewStack(
   mouse_window->SetTransparentColor(kMouseTransparentColor);
   DrawMouseCursor(mouse_window->Writer(), {0, 0});
 
-  // #@@range_begin(create_screen)
   FrameBuffer screen;
   if (auto err = screen.Initialize(frame_buffer_config)) {
     Log(kError, "failed to initialize frame buffer: %s at %s:%d\n",
@@ -279,7 +286,6 @@ extern "C" void KernelMainNewStack(
 
   layer_manager = new LayerManager;
   layer_manager->SetWriter(&screen);
-  // #@@range_end(create_screen)
 
   auto bglayer_id = layer_manager->NewLayer()
     .SetWindow(bgwindow)
