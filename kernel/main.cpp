@@ -41,7 +41,6 @@ PixelWriter* pixel_writer;
 char console_buf[sizeof(Console)];
 Console* console;
 
-// #@@range_begin(measure_printk)
 int printk(const char* format, ...) {
   va_list ap;
   int result;
@@ -60,7 +59,6 @@ int printk(const char* format, ...) {
   console->PutString(s);
   return result;
 }
-// #@@range_end(measure_printk)
 
 char memory_manager_buf[sizeof(BitmapMemoryManager)];
 BitmapMemoryManager* memory_manager;
@@ -138,7 +136,7 @@ extern "C" void KernelMainNewStack(
     kDesktopFGColor, kDesktopBGColor
   };
   console->SetWriter(pixel_writer);
-  printk("Welcomen");
+  printk("Welcome\n");
   SetLogLevel(kWarn);
 
   InitializeLAPICTimer();
@@ -270,8 +268,10 @@ extern "C" void KernelMainNewStack(
       kFrameWidth, kFrameHeight, frame_buffer_config.pixel_format);
   auto bgwriter = bgwindow->Writer();
 
+  // #@@range_begin(set_window)
   DrawDesktop(*bgwriter);
-  console->SetWriter(bgwriter);
+  console->SetWindow(bgwindow);
+  // #@@range_end(set_window)
 
   auto mouse_window = std::make_shared<Window>(
       kMouseCursorWidth, kMouseCursorHeight, frame_buffer_config.pixel_format);
