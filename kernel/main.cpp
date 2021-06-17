@@ -271,10 +271,8 @@ extern "C" void KernelMainNewStack(
 
   // #@@range_begin(make_window)
   auto main_window = std::make_shared<Window>(
-      160, 68, frame_buffer_config.pixel_format);
+      160, 52, frame_buffer_config.pixel_format);
   DrawWindow(*main_window->Writer(), "Hello Window");
-  WriteString(*main_window->Writer(), {24, 28}, "Welcome to", {0, 0, 0});
-  WriteString(*main_window->Writer(), {24, 44}, " MikanOS world!", {0, 0, 0});
   // #@@range_end(make_window)
 
   FrameBuffer screen;
@@ -294,7 +292,6 @@ extern "C" void KernelMainNewStack(
     .SetWindow(mouse_window)
     .Move(mouse_position)
     .ID();
-  // #@@range_begin(register_window)
   auto main_window_layer_id = layer_manager->NewLayer()
     .SetWindow(main_window)
     .Move({300, 100})
@@ -304,14 +301,26 @@ extern "C" void KernelMainNewStack(
   layer_manager->UpDown(mouse_layer_id, 1);
   layer_manager->UpDown(main_window_layer_id, 1);
   layer_manager->Draw();
-  // #@@range_end(register_window)
+
+  // #@@range_begin(make_counter)
+  char str[128];
+  unsigned int count = 0;
+  // #@@range_end(make_counter)
 
   while (true) {
+    // #@@range_begin(show_count)
+    ++count;
+    sprintf(str, "%010u", count);
+    FillRectangle(*main_window->Writer(), {24, 28}, {8 * 10, 16}, {0xc6, 0xc6, 0xc6});
+    WriteString(*main_window->Writer(), {24, 28}, str, {0, 0, 0});
+    layer_manager->Draw();
+
     __asm__("cli");
     if (main_queue.Count() == 0) {
-      __asm__("sti\n\thlt");
+      __asm__("sti");
       continue;
     }
+    // #@@range_end(show_count)
 
     Message msg = main_queue.Front();
     main_queue.Pop();
