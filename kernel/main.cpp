@@ -55,7 +55,6 @@ int printk(const char* format, ...) {
 char memory_manager_buf[sizeof(BitmapMemoryManager)];
 BitmapMemoryManager* memory_manager;
 
-// #@@range_begin(limit_mouse_area)
 unsigned int mouse_layer_id;
 Vector2D<int> screen_size;
 Vector2D<int> mouse_position;
@@ -68,7 +67,6 @@ void MouseObserver(int8_t displacement_x, int8_t displacement_y) {
   layer_manager->Move(mouse_layer_id, mouse_position);
   layer_manager->Draw();
 }
-// #@@range_end(limit_mouse_area)
 
 void SwitchEhci2Xhci(const pci::Device& xhc_dev) {
   bool intel_ehc_exist = false;
@@ -255,10 +253,8 @@ extern "C" void KernelMainNewStack(
     }
   }
 
-  // #@@range_begin(screen_size)
   screen_size.x = frame_buffer_config.horizontal_resolution;
   screen_size.y = frame_buffer_config.vertical_resolution;
-  // #@@range_end(screen_size)
 
   auto bgwindow = std::make_shared<Window>(
       screen_size.x, screen_size.y, frame_buffer_config.pixel_format);
@@ -272,6 +268,14 @@ extern "C" void KernelMainNewStack(
   mouse_window->SetTransparentColor(kMouseTransparentColor);
   DrawMouseCursor(mouse_window->Writer(), {0, 0});
   mouse_position = {200, 200};
+
+  // #@@range_begin(make_window)
+  auto main_window = std::make_shared<Window>(
+      160, 68, frame_buffer_config.pixel_format);
+  DrawWindow(*main_window->Writer(), "Hello Window");
+  WriteString(*main_window->Writer(), {24, 28}, "Welcome to", {0, 0, 0});
+  WriteString(*main_window->Writer(), {24, 44}, " MikanOS world!", {0, 0, 0});
+  // #@@range_end(make_window)
 
   FrameBuffer screen;
   if (auto err = screen.Initialize(frame_buffer_config)) {
@@ -290,10 +294,17 @@ extern "C" void KernelMainNewStack(
     .SetWindow(mouse_window)
     .Move(mouse_position)
     .ID();
+  // #@@range_begin(register_window)
+  auto main_window_layer_id = layer_manager->NewLayer()
+    .SetWindow(main_window)
+    .Move({300, 100})
+    .ID();
 
   layer_manager->UpDown(bglayer_id, 0);
   layer_manager->UpDown(mouse_layer_id, 1);
+  layer_manager->UpDown(main_window_layer_id, 1);
   layer_manager->Draw();
+  // #@@range_end(register_window)
 
   while (true) {
     __asm__("cli");
