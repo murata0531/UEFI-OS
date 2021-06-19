@@ -26,11 +26,9 @@ void Console::PutString(const char* s) {
     }
     ++s;
   }
-  // #@@range_begin(draw_specific_layer)
   if (layer_manager) {
     layer_manager->Draw(layer_id_);
   }
-  // #@@range_end(draw_specific_layer)
 }
 
 void Console::SetWriter(PixelWriter* writer) {
@@ -51,7 +49,6 @@ void Console::SetWindow(const std::shared_ptr<Window>& window) {
   Refresh();
 }
 
-// #@@range_begin(set_layer_id)
 void Console::SetLayerID(unsigned int layer_id) {
   layer_id_ = layer_id;
 }
@@ -59,7 +56,6 @@ void Console::SetLayerID(unsigned int layer_id) {
 unsigned int Console::LayerID() const {
   return layer_id_;
 }
-// #@@range_end(set_layer_id)
 
 void Console::Newline() {
   cursor_column_ = 0;
@@ -87,4 +83,17 @@ void Console::Refresh() {
   for (int row = 0; row < kRows; ++row) {
     WriteString(*writer_, Vector2D<int>{0, 16 * row}, buffer_[row], fg_color_);
   }
+}
+
+Console* console;
+
+namespace {
+  char console_buf[sizeof(Console)];
+}
+
+void InitializeConsole() {
+  console = new(console_buf) Console{
+    kDesktopFGColor, kDesktopBGColor
+  };
+  console->SetWriter(screen_writer);
 }
