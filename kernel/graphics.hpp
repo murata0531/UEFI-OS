@@ -63,7 +63,6 @@ struct Rectangle {
   Vector2D<T> pos, size;
 };
 
-// #@@range_begin(rect_inetersection)
 template <typename T, typename U>
 Rectangle<T> operator&(const Rectangle<T>& lhs, const Rectangle<U>& rhs) {
   const auto lhs_end = lhs.pos + lhs.size;
@@ -77,7 +76,6 @@ Rectangle<T> operator&(const Rectangle<T>& lhs, const Rectangle<U>& rhs) {
   auto new_size = ElementMin(lhs_end, rhs_end) - new_pos;
   return {new_pos, new_size};
 }
-// #@@range_end(rect_inetersection)
 
 class PixelWriter {
  public:
@@ -126,3 +124,9 @@ const PixelColor kDesktopBGColor{45, 118, 237};
 const PixelColor kDesktopFGColor{255, 255, 255};
 
 void DrawDesktop(PixelWriter& writer);
+
+extern FrameBufferConfig screen_config;
+extern PixelWriter* screen_writer;
+Vector2D<int> ScreenSize();
+
+void InitializeGraphics(const FrameBufferConfig& screen_config);
