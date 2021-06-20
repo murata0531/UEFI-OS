@@ -54,12 +54,15 @@ void SetIDTEntry(InterruptDescriptor& desc,
                  uint64_t offset,
                  uint16_t segment_selector);
 
+// #@@range_begin(int_vector)
 class InterruptVector {
  public:
   enum Number {
     kXHCI = 0x40,
+    kLAPICTimer = 0x41,
   };
 };
+// #@@range_end(int_vector)
 
 struct InterruptFrame {
   uint64_t rip;
