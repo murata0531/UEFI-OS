@@ -73,7 +73,7 @@ extern "C" void KernelMainNewStack(
   InitializeGraphics(frame_buffer_config_ref);
   InitializeConsole();
 
-  printk("Welcomen");
+  printk("Welcome\n");
   SetLogLevel(kWarn);
 
   InitializeSegmentation();
@@ -90,12 +90,16 @@ extern "C" void KernelMainNewStack(
   InitializeMouse();
   layer_manager->Draw({{0, 0}, ScreenSize()});
 
-  InitializeLAPICTimer();
+  // #@@range_begin(add_sample_timer)
+  InitializeLAPICTimer(*main_queue);
+
+  timer_manager->AddTimer(Timer(200, 2));
+  timer_manager->AddTimer(Timer(600, -1));
+  // #@@range_end(add_sample_timer)
 
   char str[128];
 
   while (true) {
-    // #@@range_begin(show_tick)
     __asm__("cli");
     const auto tick = timer_manager->CurrentTick();
     __asm__("sti");
@@ -110,7 +114,6 @@ extern "C" void KernelMainNewStack(
       __asm__("sti\n\thlt");
       continue;
     }
-    // #@@range_end(show_tick)
 
     Message msg = main_queue->front();
     main_queue->pop_front();
@@ -120,9 +123,16 @@ extern "C" void KernelMainNewStack(
     case Message::kInterruptXHCI:
       usb::xhci::ProcessEvents();
       break;
-    case Message::kInterruptLAPICTimer:
-      printk("Timer interrupt\n");
+    // #@@range_begin(timer_event)
+    case Message::kTimerTimeout:
+      printk("Timer: timeout = %lu, value = %d\n",
+          msg.arg.timer.timeout, msg.arg.timer.value);
+      if (msg.arg.timer.value > 0) {
+        timer_manager->AddTimer(Timer(
+            msg.arg.timer.timeout + 100, msg.arg.timer.value + 1));
+      }
       break;
+    // #@@range_end(timer_event)
     default:
       Log(kError, "Unknown message type: %d\n", msg.type);
     }
