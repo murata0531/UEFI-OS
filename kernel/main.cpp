@@ -31,6 +31,7 @@
 #include "layer.hpp"
 #include "message.hpp"
 #include "timer.hpp"
+#include "acpi.hpp"
 
 int printk(const char* format, ...) {
   va_list ap;
@@ -65,9 +66,12 @@ std::deque<Message>* main_queue;
 
 alignas(16) uint8_t kernel_main_stack[1024 * 1024];
 
+// #@@range_begin(receive_rsdp)
 extern "C" void KernelMainNewStack(
     const FrameBufferConfig& frame_buffer_config_ref,
-    const MemoryMap& memory_map_ref) {
+    const MemoryMap& memory_map_ref,
+    const acpi::RSDP& acpi_table) {
+// #@@range_end(receive_rsdp)
   MemoryMap memory_map{memory_map_ref};
 
   InitializeGraphics(frame_buffer_config_ref);
@@ -90,12 +94,13 @@ extern "C" void KernelMainNewStack(
   InitializeMouse();
   layer_manager->Draw({{0, 0}, ScreenSize()});
 
-  // #@@range_begin(add_sample_timer)
+  // #@@range_begin(call_init_acpi)
+  acpi::Initialize(acpi_table);
   InitializeLAPICTimer(*main_queue);
+  // #@@range_end(call_init_acpi)
 
   timer_manager->AddTimer(Timer(200, 2));
   timer_manager->AddTimer(Timer(600, -1));
-  // #@@range_end(add_sample_timer)
 
   char str[128];
 
@@ -123,7 +128,6 @@ extern "C" void KernelMainNewStack(
     case Message::kInterruptXHCI:
       usb::xhci::ProcessEvents();
       break;
-    // #@@range_begin(timer_event)
     case Message::kTimerTimeout:
       printk("Timer: timeout = %lu, value = %d\n",
           msg.arg.timer.timeout, msg.arg.timer.value);
@@ -132,7 +136,6 @@ extern "C" void KernelMainNewStack(
             msg.arg.timer.timeout + 100, msg.arg.timer.value + 1));
       }
       break;
-    // #@@range_end(timer_event)
     default:
       Log(kError, "Unknown message type: %d\n", msg.type);
     }
