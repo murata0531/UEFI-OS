@@ -10,9 +10,7 @@
 #include  <Protocol/BlockIo.h>
 #include  <Guid/FileInfo.h>
 #include  "../kernel/frame_buffer_config.hpp"
-// #@@range_begin(include_map_header)
 #include  "../kernel/memory_map.hpp"
-// #@@range_end(include_map_header)
 #include  "../kernel/elf.hpp"
 
 EFI_STATUS GetMemoryMap(struct MemoryMap* map) {
@@ -200,7 +198,7 @@ EFI_STATUS EFIAPI UefiMain(
     EFI_SYSTEM_TABLE* system_table) {
   EFI_STATUS status;
 
-  Print(L"Hello, World!\n");
+  Print(L"Hello World!\n");
 
   CHAR8 memmap_buf[4096 * 4];
   struct MemoryMap memmap = {sizeof(memmap_buf), memmap_buf, 0, 0, 0, 0};
@@ -349,12 +347,22 @@ EFI_STATUS EFIAPI UefiMain(
       Halt();
   }
 
-  // #@@range_begin(pass_memory_map)
+  // #@@range_begin(get_acpitable)
+  VOID* acpi_table = NULL;
+  for (UINTN i = 0; i < system_table->NumberOfTableEntries; ++i) {
+    if (CompareGuid(&gEfiAcpiTableGuid,
+                    &system_table->ConfigurationTable[i].VendorGuid)) {
+      acpi_table = system_table->ConfigurationTable[i].VendorTable;
+      break;
+    }
+  }
+
   typedef void EntryPointType(const struct FrameBufferConfig*,
-                              const struct MemoryMap*);
+                              const struct MemoryMap*,
+                              const VOID*);
   EntryPointType* entry_point = (EntryPointType*)entry_addr;
-  entry_point(&config, &memmap);
-  // #@@range_end(pass_memory_map)
+  entry_point(&config, &memmap, acpi_table);
+  // #@@range_end(get_acpitable)
 
   Print(L"All done\n");
 
