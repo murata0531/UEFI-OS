@@ -131,9 +131,8 @@ void InitializeTaskBWindow() {
   layer_manager->UpDown(task_b_window_layer_id, std::numeric_limits<int>::max());
 }
 
-// #@@range_begin(taskb)
-void TaskB(int task_id, int data) {
-  printk("TaskB: task_id=%d, data=%d\n", task_id, data);
+void TaskB(uint64_t task_id, int64_t data) {
+  printk("TaskB: task_id=%lu, data=%lu\n", task_id, data);
   char str[128];
   int count = 0;
   while (true) {
@@ -144,7 +143,13 @@ void TaskB(int task_id, int data) {
     layer_manager->Draw(task_b_window_layer_id);
   }
 }
-// #@@range_end(taskb)
+
+// #@@range_begin(taskc)
+void TaskIdle(uint64_t task_id, int64_t data) {
+  printk("TaskIdle: task_id=%lu, data=%lx\n", task_id, data);
+  while (true) __asm__("hlt");
+}
+// #@@range_end(taskc)
 
 std::deque<Message>* main_queue;
 
@@ -190,27 +195,11 @@ extern "C" void KernelMainNewStack(
   __asm__("sti");
   bool textbox_cursor_visible = false;
 
-  std::vector<uint64_t> task_b_stack(1024);
-  uint64_t task_b_stack_end = reinterpret_cast<uint64_t>(&task_b_stack[1024]);
-
-  // #@@range_begin(taskb_value_43)
-  memset(&task_b_ctx, 0, sizeof(task_b_ctx));
-  task_b_ctx.rip = reinterpret_cast<uint64_t>(TaskB);
-  task_b_ctx.rdi = 1;
-  task_b_ctx.rsi = 43;
-  // #@@range_end(taskb_value_43)
-
-  task_b_ctx.cr3 = GetCR3();
-  task_b_ctx.rflags = 0x202;
-  task_b_ctx.cs = kKernelCS;
-  task_b_ctx.ss = kKernelSS;
-  task_b_ctx.rsp = (task_b_stack_end & ~0xflu) - 8;
-
-  // MXCSR のすべての例外をマスクする
-  *reinterpret_cast<uint32_t*>(&task_b_ctx.fxsave_area[24]) = 0x1f80;
-
   // #@@range_begin(call_inittask)
   InitializeTask();
+  task_manager->NewTask().InitContext(TaskB, 45);
+  task_manager->NewTask().InitContext(TaskIdle, 0xdeadbeef);
+  task_manager->NewTask().InitContext(TaskIdle, 0xcafebabe);
   // #@@range_end(call_inittask)
 
   char str[128];
@@ -225,13 +214,11 @@ extern "C" void KernelMainNewStack(
     WriteString(*main_window->Writer(), {24, 28}, str, {0, 0, 0});
     layer_manager->Draw(main_window_layer_id);
 
-    // #@@range_begin(mainloop)
     __asm__("cli");
     if (main_queue->size() == 0) {
       __asm__("sti\n\thlt");
       continue;
     }
-    // #@@range_end(mainloop)
 
     Message msg = main_queue->front();
     main_queue->pop_front();
