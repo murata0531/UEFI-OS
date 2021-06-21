@@ -63,7 +63,6 @@ void InitializeMainWindow() {
   layer_manager->UpDown(main_window_layer_id, std::numeric_limits<int>::max());
 }
 
-// #@@range_begin(init_textwin)
 std::shared_ptr<Window> text_window;
 unsigned int text_window_layer_id;
 void InitializeTextWindow() {
@@ -83,10 +82,18 @@ void InitializeTextWindow() {
 
   layer_manager->UpDown(text_window_layer_id, std::numeric_limits<int>::max());
 }
-// #@@range_end(init_textwin)
 
-// #@@range_begin(input_textwin)
 int text_window_index;
+
+// #@@range_begin(draw_cursor)
+void DrawTextCursor(bool visible) {
+  const auto color = visible ? ToColor(0) : ToColor(0xffffff);
+  const auto pos = Vector2D<int>{8 + 8*text_window_index, 24 + 5};
+  FillRectangle(*text_window->Writer(), pos, {7, 15}, color);
+}
+// #@@range_end(draw_cursor)
+
+// #@@range_begin(input_text)
 void InputTextWindow(char c) {
   if (c == 0) {
     return;
@@ -94,18 +101,22 @@ void InputTextWindow(char c) {
 
   auto pos = []() { return Vector2D<int>{8 + 8*text_window_index, 24 + 6}; };
 
-  const int max_chars = (text_window->Width() - 16) / 8;
+  const int max_chars = (text_window->Width() - 16) / 8 - 1;
   if (c == '\b' && text_window_index > 0) {
+    DrawTextCursor(false);
     --text_window_index;
     FillRectangle(*text_window->Writer(), pos(), {8, 16}, ToColor(0xffffff));
+    DrawTextCursor(true);
   } else if (c >= ' ' && text_window_index < max_chars) {
+    DrawTextCursor(false);
     WriteAscii(*text_window->Writer(), pos(), c, ToColor(0));
     ++text_window_index;
+    DrawTextCursor(true);
   }
 
   layer_manager->Draw(text_window_layer_id);
 }
-// #@@range_end(input_textwin)
+// #@@range_end(input_text)
 
 std::deque<Message>* main_queue;
 
@@ -132,18 +143,25 @@ extern "C" void KernelMainNewStack(
   InitializePCI();
   usb::xhci::Initialize();
 
-  // #@@range_begin(call_init_textwin)
   InitializeLayer();
   InitializeMainWindow();
   InitializeTextWindow();
   InitializeMouse();
   layer_manager->Draw({{0, 0}, ScreenSize()});
-  // #@@range_end(call_init_textwin)
 
   acpi::Initialize(acpi_table);
   InitializeLAPICTimer(*main_queue);
 
   InitializeKeyboard(*main_queue);
+
+  // #@@range_begin(add_timer)
+  const int kTextboxCursorTimer = 1;
+  const int kTimer05Sec = static_cast<int>(kTimerFreq * 0.5);
+  __asm__("cli");
+  timer_manager->AddTimer(Timer{kTimer05Sec, kTextboxCursorTimer});
+  __asm__("sti");
+  bool textbox_cursor_visible = false;
+  // #@@range_end(add_timer)
 
   char str[128];
 
@@ -171,13 +189,22 @@ extern "C" void KernelMainNewStack(
     case Message::kInterruptXHCI:
       usb::xhci::ProcessEvents();
       break;
+    // #@@range_begin(timer_event)
     case Message::kTimerTimeout:
+      if (msg.arg.timer.value == kTextboxCursorTimer) {
+        __asm__("cli");
+        timer_manager->AddTimer(
+            Timer{msg.arg.timer.timeout + kTimer05Sec, kTextboxCursorTimer});
+        __asm__("sti");
+        textbox_cursor_visible = !textbox_cursor_visible;
+        DrawTextCursor(textbox_cursor_visible);
+        layer_manager->Draw(text_window_layer_id);
+      }
       break;
-    // #@@range_begin(handle_keypush)
+    // #@@range_end(timer_event)
     case Message::kKeyPush:
       InputTextWindow(msg.arg.keyboard.ascii);
       break;
-    // #@@range_end(handle_keypush)
     default:
       Log(kError, "Unknown message type: %d\n", msg.type);
     }
