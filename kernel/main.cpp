@@ -63,6 +63,50 @@ void InitializeMainWindow() {
   layer_manager->UpDown(main_window_layer_id, std::numeric_limits<int>::max());
 }
 
+// #@@range_begin(init_textwin)
+std::shared_ptr<Window> text_window;
+unsigned int text_window_layer_id;
+void InitializeTextWindow() {
+  const int win_w = 160;
+  const int win_h = 52;
+
+  text_window = std::make_shared<Window>(
+      win_w, win_h, screen_config.pixel_format);
+  DrawWindow(*text_window->Writer(), "Text Box Test");
+  DrawTextbox(*text_window->Writer(), {4, 24}, {win_w - 8, win_h - 24 - 4});
+
+  text_window_layer_id = layer_manager->NewLayer()
+    .SetWindow(text_window)
+    .SetDraggable(true)
+    .Move({350, 200})
+    .ID();
+
+  layer_manager->UpDown(text_window_layer_id, std::numeric_limits<int>::max());
+}
+// #@@range_end(init_textwin)
+
+// #@@range_begin(input_textwin)
+int text_window_index;
+void InputTextWindow(char c) {
+  if (c == 0) {
+    return;
+  }
+
+  auto pos = []() { return Vector2D<int>{8 + 8*text_window_index, 24 + 6}; };
+
+  const int max_chars = (text_window->Width() - 16) / 8;
+  if (c == '\b' && text_window_index > 0) {
+    --text_window_index;
+    FillRectangle(*text_window->Writer(), pos(), {8, 16}, ToColor(0xffffff));
+  } else if (c >= ' ' && text_window_index < max_chars) {
+    WriteAscii(*text_window->Writer(), pos(), c, ToColor(0));
+    ++text_window_index;
+  }
+
+  layer_manager->Draw(text_window_layer_id);
+}
+// #@@range_end(input_textwin)
+
 std::deque<Message>* main_queue;
 
 alignas(16) uint8_t kernel_main_stack[1024 * 1024];
@@ -88,17 +132,18 @@ extern "C" void KernelMainNewStack(
   InitializePCI();
   usb::xhci::Initialize();
 
+  // #@@range_begin(call_init_textwin)
   InitializeLayer();
   InitializeMainWindow();
+  InitializeTextWindow();
   InitializeMouse();
   layer_manager->Draw({{0, 0}, ScreenSize()});
+  // #@@range_end(call_init_textwin)
 
   acpi::Initialize(acpi_table);
   InitializeLAPICTimer(*main_queue);
 
-  // #@@range_begin(call_initkb)
   InitializeKeyboard(*main_queue);
-  // #@@range_end(call_initkb)
 
   char str[128];
 
@@ -128,13 +173,11 @@ extern "C" void KernelMainNewStack(
       break;
     case Message::kTimerTimeout:
       break;
-    // #@@range_begin(event_handling)
+    // #@@range_begin(handle_keypush)
     case Message::kKeyPush:
-      if (msg.arg.keyboard.ascii != 0) {
-        printk("%c", msg.arg.keyboard.ascii);
-      }
+      InputTextWindow(msg.arg.keyboard.ascii);
       break;
-    // #@@range_end(event_handling)
+    // #@@range_end(handle_keypush)
     default:
       Log(kError, "Unknown message type: %d\n", msg.type);
     }
