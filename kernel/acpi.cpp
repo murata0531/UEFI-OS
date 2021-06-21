@@ -2,9 +2,9 @@
 
 #include <cstring>
 #include <cstdlib>
+#include "asmfunc.h"
 #include "logger.hpp"
 
-// #@@range_begin(utils)
 namespace {
 
 template <typename T>
@@ -22,11 +22,9 @@ uint8_t SumBytes<uint8_t>(const uint8_t* data, size_t bytes) {
 }
 
 } // namespace
-// #@@range_end(utils)
 
 namespace acpi {
 
-// #@@range_begin(isvalid_rsdp)
 bool RSDP::IsValid() const {
   if (strncmp(this->signature, "RSD PTR ", 8) != 0) {
     Log(kDebug, "invalid signature: %.8s\n", this->signature);
@@ -46,9 +44,7 @@ bool RSDP::IsValid() const {
   }
   return true;
 }
-// #@@range_end(isvalid_rsdp)
 
-// #@@range_begin(header_isvalid)
 bool DescriptionHeader::IsValid(const char* expected_signature) const {
   if (strncmp(this->signature, expected_signature, 4) != 0) {
     Log(kDebug, "invalid signature: %.4s\n", this->signature);
@@ -60,9 +56,7 @@ bool DescriptionHeader::IsValid(const char* expected_signature) const {
   }
   return true;
 }
-// #@@range_end(header_isvalid)
 
-// #@@range_begin(xsdt)
 const DescriptionHeader& XSDT::operator[](size_t i) const {
   auto entries = reinterpret_cast<const uint64_t*>(&this->header + 1);
   return *reinterpret_cast<const DescriptionHeader*>(entries[i]);
@@ -71,11 +65,25 @@ const DescriptionHeader& XSDT::operator[](size_t i) const {
 size_t XSDT::Count() const {
   return (this->header.length - sizeof(DescriptionHeader)) / sizeof(uint64_t);
 }
-// #@@range_end(xsdt)
 
 const FADT* fadt;
 
-// #@@range_begin(initialize_acpi)
+// #@@range_begin(wait_ms)
+void WaitMilliseconds(unsigned long msec) {
+  const bool pm_timer_32 = (fadt->flags >> 8) & 1;
+  const uint32_t start = IoIn32(fadt->pm_tmr_blk);
+  uint32_t end = start + kPMTimerFreq * msec / 1000;
+  if (!pm_timer_32) {
+    end &= 0x00ffffffu;
+  }
+
+  if (end < start) { // overflow
+    while (IoIn32(fadt->pm_tmr_blk) >= start);
+  }
+  while (IoIn32(fadt->pm_tmr_blk) < end);
+}
+// #@@range_end(wait_ms)
+
 void Initialize(const RSDP& rsdp) {
   if (!rsdp.IsValid()) {
     Log(kError, "RSDP is not valid\n");
@@ -102,6 +110,5 @@ void Initialize(const RSDP& rsdp) {
     exit(1);
   }
 }
-// #@@range_end(initialize_acpi)
 
 } // namespace acpi
