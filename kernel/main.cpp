@@ -144,12 +144,10 @@ void TaskB(uint64_t task_id, int64_t data) {
   }
 }
 
-// #@@range_begin(taskc)
 void TaskIdle(uint64_t task_id, int64_t data) {
   printk("TaskIdle: task_id=%lu, data=%lx\n", task_id, data);
   while (true) __asm__("hlt");
 }
-// #@@range_end(taskc)
 
 std::deque<Message>* main_queue;
 
@@ -195,12 +193,15 @@ extern "C" void KernelMainNewStack(
   __asm__("sti");
   bool textbox_cursor_visible = false;
 
-  // #@@range_begin(call_inittask)
+  // #@@range_begin(wakeup_tasks)
   InitializeTask();
-  task_manager->NewTask().InitContext(TaskB, 45);
-  task_manager->NewTask().InitContext(TaskIdle, 0xdeadbeef);
-  task_manager->NewTask().InitContext(TaskIdle, 0xcafebabe);
-  // #@@range_end(call_inittask)
+  const uint64_t taskb_id = task_manager->NewTask()
+    .InitContext(TaskB, 45)
+    .Wakeup()
+    .ID();
+  task_manager->NewTask().InitContext(TaskIdle, 0xdeadbeef).Wakeup();
+  task_manager->NewTask().InitContext(TaskIdle, 0xcafebabe).Wakeup();
+  // #@@range_end(wakeup_tasks)
 
   char str[128];
 
@@ -239,9 +240,16 @@ extern "C" void KernelMainNewStack(
         layer_manager->Draw(text_window_layer_id);
       }
       break;
+    // #@@range_begin(sleep_wakeup_taskb)
     case Message::kKeyPush:
       InputTextWindow(msg.arg.keyboard.ascii);
+      if (msg.arg.keyboard.ascii == 's') {
+        printk("sleep TaskB: %s\n", task_manager->Sleep(taskb_id).Name());
+      } else if (msg.arg.keyboard.ascii == 'w') {
+        printk("wakeup TaskB: %s\n", task_manager->Wakeup(taskb_id).Name());
+      }
       break;
+    // #@@range_end(sleep_wakeup_taskb)
     default:
       Log(kError, "Unknown message type: %d\n", msg.type);
     }
