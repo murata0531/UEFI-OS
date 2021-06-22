@@ -11,7 +11,7 @@ Terminal::Terminal() {
       kColumns * 8 + 8 + ToplevelWindow::kMarginX,
       kRows * 16 + 8 + ToplevelWindow::kMarginY,
       screen_config.pixel_format,
-      "MikanTerm");
+      "Terminal");
   DrawTerminal(*window_->InnerWriter(), {0, 0}, window_->InnerSize());
 
   layer_id_ = layer_manager->NewLayer()
