@@ -116,11 +116,11 @@ class ActiveLayer {
 };
 
 extern ActiveLayer* active_layer;
+extern std::map<unsigned int, uint64_t>* layer_task_map;
 
 void InitializeLayer();
 void ProcessLayerMessage(const Message& msg);
 
-// #@@range_begin(make_layermsg)
 constexpr Message MakeLayerMessage(
     uint64_t task_id, unsigned int layer_id,
     LayerOperation op, const Rectangle<int>& area) {
@@ -133,4 +133,3 @@ constexpr Message MakeLayerMessage(
   msg.arg.layer.h = area.size.y;
   return msg;
 }
-// #@@range_end(make_layermsg)

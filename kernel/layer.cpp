@@ -70,7 +70,6 @@ void LayerManager::Draw(const Rectangle<int>& area) const {
   screen_->Copy(area.pos, back_buffer_, area);
 }
 
-// #@@range_begin(draw_area)
 void LayerManager::Draw(unsigned int id) const {
   Draw(id, {{0, 0}, {-1, -1}});
 }
@@ -94,7 +93,6 @@ void LayerManager::Draw(unsigned int id, Rectangle<int> area) const {
   }
   screen_->Copy(window_area.pos, back_buffer_, window_area);
 }
-// #@@range_end(draw_area)
 
 void LayerManager::Move(unsigned int id, Vector2D<int> new_pos) {
   auto layer = FindLayer(id);
@@ -221,7 +219,10 @@ void ActiveLayer::Activate(unsigned int layer_id) {
   }
 }
 
+// #@@range_begin(layer_task_map)
 ActiveLayer* active_layer;
+std::map<unsigned int, uint64_t>* layer_task_map;
+// #@@range_end(layer_task_map)
 
 void InitializeLayer() {
   const auto screen_size = ScreenSize();
@@ -257,6 +258,8 @@ void InitializeLayer() {
   layer_manager->UpDown(console->LayerID(), 1);
 
   active_layer = new ActiveLayer{*layer_manager};
+
+  layer_task_map = new std::map<unsigned int, uint64_t>;
 }
 
 void ProcessLayerMessage(const Message& msg) {
@@ -271,10 +274,8 @@ void ProcessLayerMessage(const Message& msg) {
   case LayerOperation::Draw:
     layer_manager->Draw(arg.layer_id);
     break;
-  // #@@range_begin(case_draw_area)
   case LayerOperation::DrawArea:
     layer_manager->Draw(arg.layer_id, {{arg.x, arg.y}, {arg.w, arg.h}});
     break;
-  // #@@range_end(case_draw_area)
   }
 }
