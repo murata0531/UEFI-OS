@@ -209,12 +209,10 @@ extern "C" void KernelMainNewStack(
     .InitContext(TaskB, 45)
     .Wakeup()
     .ID();
-  // #@@range_begin(start_taskterm)
   const uint64_t task_terminal_id = task_manager->NewTask()
     .InitContext(TaskTerminal, 0)
     .Wakeup()
     .ID();
-  // #@@range_end(start_taskterm)
 
   usb::xhci::Initialize();
   InitializeKeyboard();
@@ -246,7 +244,6 @@ extern "C" void KernelMainNewStack(
     case Message::kInterruptXHCI:
       usb::xhci::ProcessEvents();
       break;
-    // #@@range_begin(send_timermsg)
     case Message::kTimerTimeout:
       if (msg->arg.timer.value == kTextboxCursorTimer) {
         __asm__("cli");
@@ -262,7 +259,7 @@ extern "C" void KernelMainNewStack(
         __asm__("sti");
       }
       break;
-    // #@@range_end(send_timermsg)
+    // #@@range_begin(main_keypush)
     case Message::kKeyPush:
       if (auto act = active_layer->GetActive(); act == text_window_layer_id) {
         InputTextWindow(msg->arg.keyboard.ascii);
@@ -273,11 +270,21 @@ extern "C" void KernelMainNewStack(
           printk("wakeup TaskB: %s\n", task_manager->Wakeup(taskb_id).Name());
         }
       } else {
-        printk("key push not handled: keycode %02x, ascii %02x\n",
-            msg->arg.keyboard.keycode,
-            msg->arg.keyboard.ascii);
+        __asm__("cli");
+        auto task_it = layer_task_map->find(act);
+        __asm__("sti");
+        if (task_it != layer_task_map->end()) {
+          __asm__("cli");
+          task_manager->SendMessage(task_it->second, *msg);
+          __asm__("sti");
+        } else {
+          printk("key push not handled: keycode %02x, ascii %02x\n",
+              msg->arg.keyboard.keycode,
+              msg->arg.keyboard.ascii);
+        }
       }
       break;
+    // #@@range_end(main_keypush)
     case Message::kLayer:
       ProcessLayerMessage(*msg);
       __asm__("cli");
