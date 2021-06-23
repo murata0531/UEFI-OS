@@ -22,17 +22,21 @@ Terminal::Terminal() {
 // #@@range_end(term_ctor)
 
 // #@@range_begin(term_blink)
-void Terminal::BlinkCursor() {
+Rectangle<int> Terminal::BlinkCursor() {
   cursor_visible_ = !cursor_visible_;
   DrawCursor(cursor_visible_);
+
+  return {ToplevelWindow::kTopLeftMargin +
+            Vector2D<int>{4 + 8*cursor_.x, 5 + 16*cursor_.y},
+          {7, 15}};
 }
+// #@@range_end(term_blink)
 
 void Terminal::DrawCursor(bool visible) {
   const auto color = visible ? ToColor(0xffffff) : ToColor(0);
   const auto pos = Vector2D<int>{4 + 8*cursor_.x, 5 + 16*cursor_.y};
   FillRectangle(*window_->InnerWriter(), pos, {7, 15}, color);
 }
-// #@@range_end(term_blink)
 
 // #@@range_begin(termtask)
 void TaskTerminal(uint64_t task_id, int64_t data) {
@@ -53,18 +57,18 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
     }
 
     switch (msg->type) {
+    // #@@range_begin(send_draw_request)
     case Message::kTimerTimeout:
-      terminal->BlinkCursor();
-
       {
-        Message msg{Message::kLayer, task_id};
-        msg.arg.layer.layer_id = terminal->LayerID();
-        msg.arg.layer.op = LayerOperation::Draw;
+        const auto area = terminal->BlinkCursor();
+        Message msg = MakeLayerMessage(
+            task_id, terminal->LayerID(), LayerOperation::DrawArea, area);
         __asm__("cli");
         task_manager->SendMessage(1, msg);
         __asm__("sti");
       }
       break;
+    // #@@range_end(send_draw_request)
     default:
       break;
     }
