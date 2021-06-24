@@ -5,6 +5,7 @@
 #include "font.hpp"
 #include "layer.hpp"
 #include "pci.hpp"
+#include "fat.hpp"
 
 Terminal::Terminal() {
   window_ = std::make_shared<ToplevelWindow>(
@@ -19,10 +20,8 @@ Terminal::Terminal() {
     .SetDraggable(true)
     .ID();
 
-  // #@@range_begin(resize_history)
   Print(">");
   cmd_history_.resize(8);
-  // #@@range_end(resize_history)
 }
 
 Rectangle<int> Terminal::BlinkCursor() {
@@ -48,7 +47,6 @@ Rectangle<int> Terminal::InputKey(
 
   Rectangle<int> draw_area{CalcCursorPos(), {8*2, 16}};
 
-  // #@@range_begin(handle_enter)
   if (ascii == '\n') {
     linebuf_[linebuf_index_] = 0;
     if (linebuf_index_ > 0) {
@@ -57,7 +55,6 @@ Rectangle<int> Terminal::InputKey(
     }
     linebuf_index_ = 0;
     cmd_history_index_ = -1;
-  // #@@range_end(handle_enter)
 
     cursor_.x = 0;
     if (cursor_.y < kRows - 1) {
@@ -86,13 +83,11 @@ Rectangle<int> Terminal::InputKey(
       WriteAscii(*window_->Writer(), CalcCursorPos(), ascii, {255, 255, 255});
       ++cursor_.x;
     }
-  // #@@range_begin(handle_arrow)
   } else if (keycode == 0x51) { // down arrow
     draw_area = HistoryUpDown(-1);
   } else if (keycode == 0x52) { // up arrow
     draw_area = HistoryUpDown(1);
   }
-  // #@@range_end(handle_arrow)
 
   DrawCursor(true);
 
@@ -136,7 +131,34 @@ void Terminal::ExecuteLine() {
           dev.class_code.base, dev.class_code.sub, dev.class_code.interface);
       Print(s);
     }
+  // #@@range_begin(ls_command)
+  } else if (strcmp(command, "ls") == 0) {
+    auto root_dir_entries = fat::GetSectorByCluster<fat::DirectoryEntry>(
+        fat::boot_volume_image->root_cluster);
+    auto entries_per_cluster =
+       fat::boot_volume_image->bytes_per_sector / sizeof(fat::DirectoryEntry)
+       * fat::boot_volume_image->sectors_per_cluster;
+    char base[9], ext[4];
+    char s[64];
+    for (int i = 0; i < entries_per_cluster; ++i) {
+      ReadName(root_dir_entries[i], base, ext);
+      if (base[0] == 0x00) {
+        break;
+      } else if (static_cast<uint8_t>(base[0]) == 0xe5) {
+        continue;
+      } else if (root_dir_entries[i].attr == fat::Attribute::kLongName) {
+        continue;
+      }
+
+      if (ext[0]) {
+        sprintf(s, "%s.%s\n", base, ext);
+      } else {
+        sprintf(s, "%s\n", base);
+      }
+      Print(s);
+    }
   } else if (command[0] != 0) {
+  // #@@range_end(ls_command)
     Print("no such command: ");
     Print(command);
     Print("\n");
@@ -173,7 +195,6 @@ void Terminal::Print(const char* s) {
   DrawCursor(true);
 }
 
-// #@@range_begin(history_updown)
 Rectangle<int> Terminal::HistoryUpDown(int direction) {
   if (direction == -1 && cmd_history_index_ >= 0) {
     --cmd_history_index_;
@@ -199,7 +220,6 @@ Rectangle<int> Terminal::HistoryUpDown(int direction) {
   cursor_.x = linebuf_index_ + 1;
   return draw_area;
 }
-// #@@range_end(history_updown)
 
 void TaskTerminal(uint64_t task_id, int64_t data) {
   __asm__("cli");
