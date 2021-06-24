@@ -1,10 +1,11 @@
 #include "terminal.hpp"
 
+#include <cstring>
+
 #include "font.hpp"
 #include "layer.hpp"
 
-#include "logger.hpp"
-
+// #@@range_begin(term_ctor)
 Terminal::Terminal() {
   window_ = std::make_shared<ToplevelWindow>(
       kColumns * 8 + 8 + ToplevelWindow::kMarginX,
@@ -17,7 +18,10 @@ Terminal::Terminal() {
     .SetWindow(window_)
     .SetDraggable(true)
     .ID();
+
+  Print(">");
 }
+// #@@range_end(term_ctor)
 
 Rectangle<int> Terminal::BlinkCursor() {
   cursor_visible_ = !cursor_visible_;
@@ -31,33 +35,33 @@ void Terminal::DrawCursor(bool visible) {
   FillRectangle(*window_->Writer(), CalcCursorPos(), {7, 15}, color);
 }
 
-// #@@range_begin(calc_cursor_pos)
 Vector2D<int> Terminal::CalcCursorPos() const {
   return ToplevelWindow::kTopLeftMargin +
       Vector2D<int>{4 + 8 * cursor_.x, 4 + 16 * cursor_.y};
 }
-// #@@range_end(calc_cursor_pos)
 
-// #@@range_begin(input_key)
 Rectangle<int> Terminal::InputKey(
     uint8_t modifier, uint8_t keycode, char ascii) {
   DrawCursor(false);
 
   Rectangle<int> draw_area{CalcCursorPos(), {8*2, 16}};
 
+  // #@@range_begin(input_key)
   if (ascii == '\n') {
     linebuf_[linebuf_index_] = 0;
     linebuf_index_ = 0;
     cursor_.x = 0;
-    Log(kWarn, "line: %s\n", &linebuf_[0]);
     if (cursor_.y < kRows - 1) {
       ++cursor_.y;
     } else {
       Scroll1();
     }
+    ExecuteLine();
+    Print(">");
     draw_area.pos = ToplevelWindow::kTopLeftMargin;
     draw_area.size = window_->InnerSize();
   } else if (ascii == '\b') {
+  // #@@range_end(input_key)
     if (cursor_.x > 0) {
       --cursor_.x;
       FillRectangle(*window_->Writer(), CalcCursorPos(), {8, 16}, {0, 0, 0});
@@ -80,9 +84,7 @@ Rectangle<int> Terminal::InputKey(
 
   return draw_area;
 }
-// #@@range_end(input_key)
 
-// #@@range_begin(scroll)
 void Terminal::Scroll1() {
   Rectangle<int> move_src{
     ToplevelWindow::kTopLeftMargin + Vector2D<int>{4, 4 + 16},
@@ -92,7 +94,60 @@ void Terminal::Scroll1() {
   FillRectangle(*window_->InnerWriter(),
                 {4, 4 + 16*cursor_.y}, {8*kColumns, 16}, {0, 0, 0});
 }
-// #@@range_end(scroll)
+
+// #@@range_begin(execute_line)
+void Terminal::ExecuteLine() {
+  char* command = &linebuf_[0];
+  char* first_arg = strchr(&linebuf_[0], ' ');
+  if (first_arg) {
+    *first_arg = 0;
+    ++first_arg;
+  }
+
+  if (strcmp(command, "echo") == 0) {
+    if (first_arg) {
+      Print(first_arg);
+    }
+    Print("\n");
+  } else if (command[0] != 0) {
+    Print("no such command: ");
+    Print(command);
+    Print("\n");
+  }
+}
+// #@@range_end(execute_line)
+
+// #@@range_begin(print)
+void Terminal::Print(const char* s) {
+  DrawCursor(false);
+
+  auto newline = [this]() {
+    cursor_.x = 0;
+    if (cursor_.y < kRows - 1) {
+      ++cursor_.y;
+    } else {
+      Scroll1();
+    }
+  };
+
+  while (*s) {
+    if (*s == '\n') {
+      newline();
+    } else {
+      WriteAscii(*window_->Writer(), CalcCursorPos(), *s, {255, 255, 255});
+      if (cursor_.x == kColumns - 1) {
+        newline();
+      } else {
+        ++cursor_.x;
+      }
+    }
+
+    ++s;
+  }
+
+  DrawCursor(true);
+}
+// #@@range_end(print)
 
 void TaskTerminal(uint64_t task_id, int64_t data) {
   __asm__("cli");
@@ -100,10 +155,8 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
   Terminal* terminal = new Terminal;
   layer_manager->Move(terminal->LayerID(), {100, 200});
   active_layer->Activate(terminal->LayerID());
-  // #@@range_begin(register_taskmap)
   layer_task_map->insert(std::make_pair(terminal->LayerID(), task_id));
   __asm__("sti");
-  // #@@range_end(register_taskmap)
 
   while (true) {
     __asm__("cli");
@@ -125,7 +178,6 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
         __asm__("sti");
       }
       break;
-    // #@@range_begin(handle_keypush)
     case Message::kKeyPush:
       {
         const auto area = terminal->InputKey(msg->arg.keyboard.modifier,
@@ -138,7 +190,6 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
         __asm__("sti");
       }
       break;
-    // #@@range_end(handle_keypush)
     default:
       break;
     }
