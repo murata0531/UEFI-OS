@@ -6,6 +6,40 @@
 #include "layer.hpp"
 #include "pci.hpp"
 #include "asmfunc.h"
+#include "elf.hpp"
+
+// #@@range_begin(make_argv)
+namespace {
+
+std::vector<char*> MakeArgVector(char* command, char* first_arg) {
+  std::vector<char*> argv;
+  argv.push_back(command);
+
+  char* p = first_arg;
+  while (true) {
+    while (isspace(p[0])) {
+      ++p;
+    }
+    if (p[0] == 0) {
+      break;
+    }
+    argv.push_back(p);
+
+    while (p[0] != 0 && !isspace(p[0])) {
+      ++p;
+    }
+    if (p[0] == 0) {
+      break;
+    }
+    p[0] = 0;
+    ++p;
+  }
+
+  return argv;
+}
+
+} // namespace
+// #@@range_end(make_argv)
 
 Terminal::Terminal() {
   window_ = std::make_shared<ToplevelWindow>(
@@ -180,22 +214,21 @@ void Terminal::ExecuteLine() {
       }
       DrawCursor(true);
     }
-  // #@@range_begin(find_file)
   } else if (command[0] != 0) {
+    // #@@range_begin(pass_arg)
     auto file_entry = fat::FindFile(command);
     if (!file_entry) {
       Print("no such command: ");
       Print(command);
       Print("\n");
     } else {
-      ExecuteFile(*file_entry);
+      ExecuteFile(*file_entry, command, first_arg);
     }
+    // #@@range_end(pass_arg)
   }
-  // #@@range_end(find_file)
 }
 
-// #@@range_begin(execute_file)
-void Terminal::ExecuteFile(const fat::DirectoryEntry& file_entry) {
+void Terminal::ExecuteFile(const fat::DirectoryEntry& file_entry, char* command, char* first_arg) {
   auto cluster = file_entry.FirstCluster();
   auto remain_bytes = file_entry.file_size;
 
@@ -212,11 +245,28 @@ void Terminal::ExecuteFile(const fat::DirectoryEntry& file_entry) {
     cluster = fat::NextCluster(cluster);
   }
 
-  using Func = void ();
-  auto f = reinterpret_cast<Func*>(&file_buf[0]);
-  f();
+  // #@@range_begin(call_main)
+  auto elf_header = reinterpret_cast<Elf64_Ehdr*>(&file_buf[0]);
+  if (memcmp(elf_header->e_ident, "\x7f" "ELF", 4) != 0) {
+    using Func = void ();
+    auto f = reinterpret_cast<Func*>(&file_buf[0]);
+    f();
+    return;
+  }
+
+  auto argv = MakeArgVector(command, first_arg);
+
+  auto entry_addr = elf_header->e_entry;
+  entry_addr += reinterpret_cast<uintptr_t>(&file_buf[0]);
+  using Func = int (int, char**);
+  auto f = reinterpret_cast<Func*>(entry_addr);
+  auto ret = f(argv.size(), &argv[0]);
+
+  char s[64];
+  sprintf(s, "app exited. ret = %d\n", ret);
+  Print(s);
+  // #@@range_end(call_main)
 }
-// #@@range_end(execute_file)
 
 void Terminal::Print(char c) {
   auto newline = [this]() {
@@ -287,7 +337,6 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
   __asm__("sti");
 
   while (true) {
-    // #@@range_begin(sti_after_getmsg)
     __asm__("cli");
     auto msg = task.ReceiveMessage();
     if (!msg) {
@@ -296,7 +345,6 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
       continue;
     }
     __asm__("sti");
-    // #@@range_end(sti_after_getmsg)
 
     switch (msg->type) {
     case Message::kTimerTimeout:
