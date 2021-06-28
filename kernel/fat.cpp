@@ -5,7 +5,6 @@
 
 namespace fat {
 
-// #@@range_begin(init_fat)
 BPB* boot_volume_image;
 unsigned long bytes_per_cluster;
 
@@ -15,7 +14,6 @@ void Initialize(void* volume_image) {
     static_cast<unsigned long>(boot_volume_image->bytes_per_sector) *
     boot_volume_image->sectors_per_cluster;
 }
-// #@@range_end(init_fat)
 
 uintptr_t GetClusterAddr(unsigned long cluster) {
   unsigned long sector_num =
@@ -40,7 +38,6 @@ void ReadName(const DirectoryEntry& entry, char* base, char* ext) {
   }
 }
 
-// #@@range_begin(next_cluster)
 unsigned long NextCluster(unsigned long cluster) {
   uintptr_t fat_offset =
     boot_volume_image->reserved_sector_count *
@@ -53,9 +50,7 @@ unsigned long NextCluster(unsigned long cluster) {
   }
   return next;
 }
-// #@@range_end(next_cluster)
 
-// #@@range_begin(find_file)
 DirectoryEntry* FindFile(const char* name, unsigned long directory_cluster) {
   if (directory_cluster == 0) {
     directory_cluster = boot_volume_image->root_cluster;
@@ -74,9 +69,7 @@ DirectoryEntry* FindFile(const char* name, unsigned long directory_cluster) {
 
   return nullptr;
 }
-// #@@range_end(find_file)
 
-// #@@range_begin(name_isequal)
 bool NameIsEqual(const DirectoryEntry& entry, const char* name) {
   unsigned char name83[11];
   memset(name83, 0x20, sizeof(name83));
@@ -93,6 +86,29 @@ bool NameIsEqual(const DirectoryEntry& entry, const char* name) {
 
   return memcmp(entry.name, name83, sizeof(name83)) == 0;
 }
-// #@@range_end(name_isequal)
+
+// #@@range_begin(load_file)
+size_t LoadFile(void* buf, size_t len, const DirectoryEntry& entry) {
+  auto is_valid_cluster = [](uint32_t c) {
+    return c != 0 && c != fat::kEndOfClusterchain;
+  };
+  auto cluster = entry.FirstCluster();
+
+  const auto buf_uint8 = reinterpret_cast<uint8_t*>(buf);
+  const auto buf_end = buf_uint8 + len;
+  auto p = buf_uint8;
+
+  while (is_valid_cluster(cluster)) {
+    if (bytes_per_cluster >= buf_end - p) {
+      memcpy(p, GetSectorByCluster<uint8_t>(cluster), buf_end - p);
+      return len;
+    }
+    memcpy(p, GetSectorByCluster<uint8_t>(cluster), bytes_per_cluster);
+    p += bytes_per_cluster;
+    cluster = NextCluster(cluster);
+  }
+  return p - buf_uint8;
+}
+// #@@range_end(load_file)
 
 } // namespace fat

@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 
 namespace fat {
 
@@ -50,7 +51,6 @@ enum class Attribute : uint8_t {
   kLongName  = 0x0f,
 };
 
-// #@@range_begin(directory_entry)
 struct DirectoryEntry {
   unsigned char name[11];
   Attribute attr;
@@ -70,7 +70,6 @@ struct DirectoryEntry {
       (static_cast<uint32_t>(first_cluster_high) << 16);
   }
 } __attribute__((packed));
-// #@@range_end(directory_entry)
 
 extern BPB* boot_volume_image;
 extern unsigned long bytes_per_cluster;
@@ -102,9 +101,7 @@ T* GetSectorByCluster(unsigned long cluster) {
  */
 void ReadName(const DirectoryEntry& entry, char* base, char* ext);
 
-// #@@range_begin(eoc)
 static const unsigned long kEndOfClusterchain = 0x0ffffffflu;
-// #@@range_end(eoc)
 
 /** @brief 指定されたクラスタの次のクラスタ番号を返す。
  *
@@ -122,5 +119,14 @@ unsigned long NextCluster(unsigned long cluster);
 DirectoryEntry* FindFile(const char* name, unsigned long directory_cluster = 0);
 
 bool NameIsEqual(const DirectoryEntry& entry, const char* name);
+
+/** @brief 指定されたファイルの内容をバッファへコピーする。
+ *
+ * @param buf  ファイル内容の格納先
+ * @param len  バッファの大きさ（バイト単位）
+ * @param entry  ファイルを表すディレクトリエントリ
+ * @return  読み込んだバイト数
+ */
+size_t LoadFile(void* buf, size_t len, const DirectoryEntry& entry);
 
 } // namespace fat
