@@ -13,12 +13,31 @@
 
 namespace {
 
-std::vector<char*> MakeArgVector(char* command, char* first_arg) {
-  std::vector<char*> argv;
-  argv.push_back(command);
-  if (!first_arg) {
-    return argv;
+// #@@range_begin(make_argv)
+WithError<int> MakeArgVector(char* command, char* first_arg,
+    char** argv, int argv_len, char* argbuf, int argbuf_len) {
+  int argc = 0;
+  int argbuf_index = 0;
+
+  auto push_to_argv = [&](const char* s) {
+    if (argc >= argv_len || argbuf_index >= argbuf_len) {
+      return MAKE_ERROR(Error::kFull);
+    }
+
+    argv[argc] = &argbuf[argbuf_index];
+    ++argc;
+    strcpy(&argbuf[argbuf_index], s);
+    argbuf_index += strlen(s) + 1;
+    return MAKE_ERROR(Error::kSuccess);
+  };
+
+  if (auto err = push_to_argv(command)) {
+    return { argc, err };
   }
+  if (!first_arg) {
+    return { argc, MAKE_ERROR(Error::kSuccess) };
+  }
+  // #@@range_end(make_argv)
 
   char* p = first_arg;
   while (true) {
@@ -28,29 +47,31 @@ std::vector<char*> MakeArgVector(char* command, char* first_arg) {
     if (p[0] == 0) {
       break;
     }
-    argv.push_back(p);
+    const char* arg = p;
 
     while (p[0] != 0 && !isspace(p[0])) {
       ++p;
     }
-    if (p[0] == 0) {
+    // here: p[0] == 0 || isspace(p[0])
+    const bool is_end = p[0] == 0;
+    p[0] = 0;
+    if (auto err = push_to_argv(arg)) {
+      return { argc, err };
+    }
+    if (is_end) {
       break;
     }
-    p[0] = 0;
     ++p;
   }
 
-  return argv;
+  return { argc, MAKE_ERROR(Error::kSuccess) };
 }
 
-// #@@range_begin(get_phdr)
 Elf64_Phdr* GetProgramHeader(Elf64_Ehdr* ehdr) {
   return reinterpret_cast<Elf64_Phdr*>(
       reinterpret_cast<uintptr_t>(ehdr) + ehdr->e_phoff);
 }
-// #@@range_end(get_phdr)
 
-// #@@range_begin(get_first_addr)
 uintptr_t GetFirstLoadAddress(Elf64_Ehdr* ehdr) {
   auto phdr = GetProgramHeader(ehdr);
   for (int i = 0; i < ehdr->e_phnum; ++i) {
@@ -59,11 +80,9 @@ uintptr_t GetFirstLoadAddress(Elf64_Ehdr* ehdr) {
   }
   return 0;
 }
-// #@@range_end(get_first_addr)
 
 static_assert(kBytesPerFrame >= 4096);
 
-// #@@range_begin(new_pagemap)
 WithError<PageMapEntry*> NewPageMap() {
   auto frame = memory_manager->Allocate(1);
   if (frame.error) {
@@ -74,9 +93,7 @@ WithError<PageMapEntry*> NewPageMap() {
   memset(e, 0, sizeof(uint64_t) * 512);
   return { e, MAKE_ERROR(Error::kSuccess) };
 }
-// #@@range_end(new_pagemap)
 
-// #@@range_begin(set_newpagemap)
 WithError<PageMapEntry*> SetNewPageMapIfNotPresent(PageMapEntry& entry) {
   if (entry.bits.present) {
     return { entry.Pointer(), MAKE_ERROR(Error::kSuccess) };
@@ -92,19 +109,20 @@ WithError<PageMapEntry*> SetNewPageMapIfNotPresent(PageMapEntry& entry) {
 
   return { child_map, MAKE_ERROR(Error::kSuccess) };
 }
-// #@@range_end(set_newpagemap)
 
-// #@@range_begin(setup_pagemap)
 WithError<size_t> SetupPageMap(
     PageMapEntry* page_map, int page_map_level, LinearAddress4Level addr, size_t num_4kpages) {
   while (num_4kpages > 0) {
     const auto entry_index = addr.Part(page_map_level);
 
+    // #@@range_begin(set_userbit)
     auto [ child_map, err ] = SetNewPageMapIfNotPresent(page_map[entry_index]);
     if (err) {
       return { num_4kpages, err };
     }
     page_map[entry_index].bits.writable = 1;
+    page_map[entry_index].bits.user = 1;
+    // #@@range_end(set_userbit)
 
     if (page_map_level == 1) {
       --num_4kpages;
@@ -129,16 +147,12 @@ WithError<size_t> SetupPageMap(
 
   return { num_4kpages, MAKE_ERROR(Error::kSuccess) };
 }
-// #@@range_end(setup_pagemap)
 
-// #@@range_begin(setup_pagemaps)
 Error SetupPageMaps(LinearAddress4Level addr, size_t num_4kpages) {
   auto pml4_table = reinterpret_cast<PageMapEntry*>(GetCR3());
   return SetupPageMap(pml4_table, 4, addr, num_4kpages).error;
 }
-// #@@range_end(setup_pagemaps)
 
-// #@@range_begin(copy_loadsegms)
 Error CopyLoadSegments(Elf64_Ehdr* ehdr) {
   auto phdr = GetProgramHeader(ehdr);
   for (int i = 0; i < ehdr->e_phnum; ++i) {
@@ -159,9 +173,7 @@ Error CopyLoadSegments(Elf64_Ehdr* ehdr) {
   }
   return MAKE_ERROR(Error::kSuccess);
 }
-// #@@range_end(copy_loadsegms)
 
-// #@@range_begin(load_elf)
 Error LoadELF(Elf64_Ehdr* ehdr) {
   if (ehdr->e_type != ET_EXEC) {
     return MAKE_ERROR(Error::kInvalidFormat);
@@ -178,9 +190,7 @@ Error LoadELF(Elf64_Ehdr* ehdr) {
 
   return MAKE_ERROR(Error::kSuccess);
 }
-// #@@range_end(load_elf)
 
-// #@@range_begin(clean_pagemap)
 Error CleanPageMap(PageMapEntry* page_map, int page_map_level) {
   for (int i = 0; i < 512; ++i) {
     auto entry = page_map[i];
@@ -204,9 +214,7 @@ Error CleanPageMap(PageMapEntry* page_map, int page_map_level) {
 
   return MAKE_ERROR(Error::kSuccess);
 }
-// #@@range_end(clean_pagemap)
 
-// #@@range_begin(clean_pagemaps)
 Error CleanPageMaps(LinearAddress4Level addr) {
   auto pml4_table = reinterpret_cast<PageMapEntry*>(GetCR3());
   auto pdp_table = pml4_table[addr.parts.pml4].Pointer();
@@ -219,7 +227,6 @@ Error CleanPageMaps(LinearAddress4Level addr) {
   const FrameID pdp_frame{pdp_addr / kBytesPerFrame};
   return memory_manager->Free(pdp_frame, 1);
 }
-// #@@range_end(clean_pagemaps)
 
 } // namespace
 
@@ -411,10 +418,8 @@ void Terminal::ExecuteLine() {
 }
 
 Error Terminal::ExecuteFile(const fat::DirectoryEntry& file_entry, char* command, char* first_arg) {
-  // #@@range_begin(load_file)
   std::vector<uint8_t> file_buf(file_entry.file_size);
   fat::LoadFile(&file_buf[0], file_buf.size(), file_entry);
-  // #@@range_end(load_file)
 
   auto elf_header = reinterpret_cast<Elf64_Ehdr*>(&file_buf[0]);
   if (memcmp(elf_header->e_ident, "\x7f" "ELF", 4) != 0) {
@@ -424,26 +429,46 @@ Error Terminal::ExecuteFile(const fat::DirectoryEntry& file_entry, char* command
     return MAKE_ERROR(Error::kSuccess);
   }
 
-  // #@@range_begin(load_app)
-  auto argv = MakeArgVector(command, first_arg);
   if (auto err = LoadELF(elf_header)) {
     return err;
   }
 
-  auto entry_addr = elf_header->e_entry;
-  using Func = int (int, char**);
-  auto f = reinterpret_cast<Func*>(entry_addr);
-  auto ret = f(argv.size(), &argv[0]);
+  // #@@range_begin(arrange_args)
+  LinearAddress4Level args_frame_addr{0xffff'ffff'ffff'f000};
+  if (auto err = SetupPageMaps(args_frame_addr, 1)) {
+    return err;
+  }
+  auto argv = reinterpret_cast<char**>(args_frame_addr.value);
+  int argv_len = 32; // argv = 8x32 = 256 bytes
+  auto argbuf = reinterpret_cast<char*>(args_frame_addr.value + sizeof(char**) * argv_len);
+  int argbuf_len = 4096 - sizeof(char**) * argv_len;
+  auto argc = MakeArgVector(command, first_arg, argv, argv_len, argbuf, argbuf_len);
+  if (argc.error) {
+    return argc.error;
+  }
+  // #@@range_end(arrange_args)
 
+  // #@@range_begin(call_app)
+  LinearAddress4Level stack_frame_addr{0xffff'ffff'ffff'e000};
+  if (auto err = SetupPageMaps(stack_frame_addr, 1)) {
+    return err;
+  }
+
+  auto entry_addr = elf_header->e_entry;
+  CallApp(argc.value, argv, 3 << 3 | 3, 4 << 3 | 3, entry_addr,
+      stack_frame_addr.value + 4096 - 8);
+
+  /*
   char s[64];
   sprintf(s, "app exited. ret = %d\n", ret);
   Print(s);
+  */
+  // #@@range_end(call_app)
 
   const auto addr_first = GetFirstLoadAddress(elf_header);
   if (auto err = CleanPageMaps(LinearAddress4Level{addr_first})) {
     return err;
   }
-  // #@@range_end(load_app)
 
   return MAKE_ERROR(Error::kSuccess);
 }
