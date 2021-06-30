@@ -36,6 +36,7 @@
 #include "task.hpp"
 #include "terminal.hpp"
 #include "fat.hpp"
+#include "syscall.hpp"
 
 int printk(const char* format, ...) {
   va_list ap;
@@ -132,11 +133,9 @@ extern "C" void KernelMainNewStack(
 
   InitializeSegmentation();
   InitializePaging();
-  // #@@range_begin(call_init_tss)
   InitializeMemoryManager(memory_map);
   InitializeTSS();
   InitializeInterrupt();
-  // #@@range_end(call_init_tss)
 
   fat::Initialize(volume_image);
   InitializePCI();
@@ -153,6 +152,8 @@ extern "C" void KernelMainNewStack(
   const int kTimer05Sec = static_cast<int>(kTimerFreq * 0.5);
   timer_manager->AddTimer(Timer{kTimer05Sec, kTextboxCursorTimer});
   bool textbox_cursor_visible = false;
+
+  InitializeSyscall();
 
   InitializeTask();
   Task& main_task = task_manager->CurrentTask();
