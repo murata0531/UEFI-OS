@@ -5,14 +5,12 @@
 #include "logger.hpp"
 #include "memory_manager.hpp"
 
-// #@@range_begin(tss_util)
 namespace {
   std::array<SegmentDescriptor, 7> gdt;
   std::array<uint32_t, 26> tss;
 
   static_assert((kTSS >> 3) + 1 < gdt.size());
 }
-// #@@range_end(tss_util)
 
 void SetCodeSegment(SegmentDescriptor& desc,
                     DescriptorType type,
@@ -48,7 +46,6 @@ void SetDataSegment(SegmentDescriptor& desc,
   desc.bits.default_operation_size = 1; // 32-bit stack segment
 }
 
-// #@@range_begin(set_systemsegm)
 void SetSystemSegment(SegmentDescriptor& desc,
                       DescriptorType type,
                       unsigned int descriptor_privilege_level,
@@ -58,16 +55,17 @@ void SetSystemSegment(SegmentDescriptor& desc,
   desc.bits.system_segment = 0;
   desc.bits.long_mode = 0;
 }
-// #@@range_end(set_systemsegm)
 
+// #@@range_begin(setup_segm)
 void SetupSegments() {
   gdt[0].data = 0;
   SetCodeSegment(gdt[1], DescriptorType::kExecuteRead, 0, 0, 0xfffff);
   SetDataSegment(gdt[2], DescriptorType::kReadWrite, 0, 0, 0xfffff);
-  SetCodeSegment(gdt[3], DescriptorType::kExecuteRead, 3, 0, 0xfffff);
-  SetDataSegment(gdt[4], DescriptorType::kReadWrite, 3, 0, 0xfffff);
+  SetDataSegment(gdt[3], DescriptorType::kReadWrite, 3, 0, 0xfffff);
+  SetCodeSegment(gdt[4], DescriptorType::kExecuteRead, 3, 0, 0xfffff);
   LoadGDT(sizeof(gdt) - 1, reinterpret_cast<uintptr_t>(&gdt[0]));
 }
+// #@@range_end(setup_segm)
 
 void InitializeSegmentation() {
   SetupSegments();
@@ -76,7 +74,6 @@ void InitializeSegmentation() {
   SetCSSS(kKernelCS, kKernelSS);
 }
 
-// #@@range_begin(init_tss)
 void InitializeTSS() {
   const int kRSP0Frames = 8;
   auto [ stack0, err ] = memory_manager->Allocate(kRSP0Frames);
@@ -96,4 +93,3 @@ void InitializeTSS() {
 
   LoadTR(kTSS);
 }
-// #@@range_end(init_tss)
