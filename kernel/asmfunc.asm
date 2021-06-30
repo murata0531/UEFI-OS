@@ -92,11 +92,9 @@ KernelMain:
     hlt
     jmp .fin
 
-; #@@range_begin(switch_ctx)
 global SwitchContext
 SwitchContext:  ; void SwitchContext(void* next_ctx, void* current_ctx);
     mov [rsi + 0x40], rax
-; #@@range_end(switch_ctx)
     mov [rsi + 0x48], rbx
     mov [rsi + 0x50], rcx
     mov [rsi + 0x58], rdx
@@ -132,7 +130,6 @@ SwitchContext:  ; void SwitchContext(void* next_ctx, void* current_ctx);
     mov dx, gs
     mov [rsi + 0x38], rdx
 
-; #@@range_begin(restore_ctx)
     fxsave [rsi + 0xc0]
     ; fall through to RestoreContext
 
@@ -140,7 +137,6 @@ global RestoreContext
 RestoreContext:  ; void RestoreContext(void* task_context);
     ; iret 用のスタックフレーム
     push qword [rdi + 0x28] ; SS
-; #@@range_end(restore_ctx)
     push qword [rdi + 0x70] ; RSP
     push qword [rdi + 0x10] ; RFLAGS
     push qword [rdi + 0x20] ; CS
@@ -173,9 +169,7 @@ RestoreContext:  ; void RestoreContext(void* task_context);
 
     mov rdi, [rdi + 0x60]
 
-; #@@range_begin(restore_ctx_ret)
     o64 iret
-; #@@range_end(restore_ctx_ret)
 
 global CallApp
 CallApp:  ; void CallApp(int argc, char** argv, uint16_t cs, uint16_t ss, uint64_t rip, uint64_t rsp);
@@ -188,7 +182,6 @@ CallApp:  ; void CallApp(int argc, char** argv, uint16_t cs, uint16_t ss, uint64
     o64 retf
     ; アプリケーションが終了してもここには来ない
 
-; #@@range_begin(inthandler_timer)
 extern LAPICTimerOnInterrupt
 ; void LAPICTimerOnInterrupt(const TaskContext& ctx_stack);
 
@@ -254,11 +247,44 @@ IntHandlerLAPICTimer:  ; void IntHandlerLAPICTimer();
     mov rsp, rbp
     pop rbp
     iretq
-; #@@range_end(inthandler_timer)
 
-; #@@range_begin(load_tr)
 global LoadTR
 LoadTR:  ; void LoadTR(uint16_t sel);
     ltr di
     ret
-; #@@range_end(load_tr)
+
+; #@@range_begin(write_msr)
+global WriteMSR
+WriteMSR:  ; void WriteMSR(uint32_t msr, uint64_t value);
+    mov rdx, rsi
+    shr rdx, 32
+    mov eax, esi
+    mov ecx, edi
+    wrmsr
+    ret
+; #@@range_end(write_msr)
+
+; #@@range_begin(syscall_entry)
+extern syscall_table
+global SyscallEntry
+SyscallEntry:  ; void SyscallEntry(void);
+    push rbp
+    push rcx  ; original RIP
+    push r11  ; original RFLAGS
+
+    mov rcx, r10
+    and eax, 0x7fffffff
+    mov rbp, rsp
+    and rsp, 0xfffffffffffffff0
+
+    call [syscall_table + 8 * eax]
+    ; rbx, r12-r15 は callee-saved なので呼び出し側で保存しない
+    ; rax は戻り値用なので呼び出し側で保存しない
+
+    mov rsp, rbp
+
+    pop r11
+    pop rcx
+    pop rbp
+    o64 sysret
+; #@@range_end(syscall_entry)
