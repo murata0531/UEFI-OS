@@ -226,7 +226,9 @@ Error CleanPageMaps(LinearAddress4Level addr) {
 
 } // namespace
 
-Terminal::Terminal() {
+// #@@range_begin(term_task_id)
+Terminal::Terminal(uint64_t task_id) : task_id_{task_id} {
+// #@@range_end(term_task_id)
   window_ = std::make_shared<ToplevelWindow>(
       kColumns * 8 + 8 + ToplevelWindow::kMarginX,
       kRows * 16 + 8 + ToplevelWindow::kMarginY,
@@ -487,16 +489,39 @@ void Terminal::Print(char c) {
   }
 }
 
-void Terminal::Print(const char* s) {
+// #@@range_begin(print_redraw)
+void Terminal::Print(const char* s, std::optional<size_t> len) {
+  const auto cursor_before = CalcCursorPos();
   DrawCursor(false);
 
-  while (*s) {
-    Print(*s);
-    ++s;
+  if (len) {
+    for (size_t i = 0; i < *len; ++i) {
+      Print(*s);
+      ++s;
+    }
+  } else {
+    while (*s) {
+      Print(*s);
+      ++s;
+    }
   }
 
   DrawCursor(true);
+  const auto cursor_after = CalcCursorPos();
+
+  Vector2D<int> draw_pos{ToplevelWindow::kTopLeftMargin.x, cursor_before.y};
+  Vector2D<int> draw_size{window_->InnerSize().x,
+                          cursor_after.y - cursor_before.y + 16};
+
+  Rectangle<int> draw_area{draw_pos, draw_size};
+
+  Message msg = MakeLayerMessage(
+      task_id_, LayerID(), LayerOperation::DrawArea, draw_area);
+  __asm__("cli");
+  task_manager->SendMessage(1, msg);
+  __asm__("sti");
 }
+// #@@range_end(print_redraw)
 
 Rectangle<int> Terminal::HistoryUpDown(int direction) {
   if (direction == -1 && cmd_history_index_ >= 0) {
@@ -524,14 +549,19 @@ Rectangle<int> Terminal::HistoryUpDown(int direction) {
   return draw_area;
 }
 
+// #@@range_begin(task_term_map)
+std::map<uint64_t, Terminal*>* terminals;
+
 void TaskTerminal(uint64_t task_id, int64_t data) {
   __asm__("cli");
   Task& task = task_manager->CurrentTask();
-  Terminal* terminal = new Terminal;
+  Terminal* terminal = new Terminal{task_id};
   layer_manager->Move(terminal->LayerID(), {100, 200});
   active_layer->Activate(terminal->LayerID());
   layer_task_map->insert(std::make_pair(terminal->LayerID(), task_id));
+  (*terminals)[task_id] = terminal;
   __asm__("sti");
+// #@@range_end(task_term_map)
 
   while (true) {
     __asm__("cli");
