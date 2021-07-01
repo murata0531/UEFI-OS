@@ -38,7 +38,6 @@ namespace {
     NotifyEndOfInterrupt();
   }
 
-  // #@@range_begin(print_frame)
   void PrintHex(uint64_t value, int width, Vector2D<int> pos) {
     for (int i = 0; i < width; ++i) {
       int x = (value >> 4 * (width - i - 1)) & 0xfu;
@@ -62,9 +61,7 @@ namespace {
     PrintHex(frame->ss, 4, {500 + 8*7, 16*3});
     PrintHex(frame->rsp, 16, {500 + 8*12, 16*3});
   }
-  // #@@range_end(print_frame)
 
-  // #@@range_begin(fault_handlers)
 #define FaultHandlerWithError(fault_name) \
   __attribute__((interrupt)) \
   void IntHandler ## fault_name (InterruptFrame* frame, uint64_t error_code) { \
@@ -99,10 +96,8 @@ namespace {
   FaultHandlerNoError(MC)
   FaultHandlerNoError(XM)
   FaultHandlerNoError(VE)
-  // #@@range_end(fault_handlers)
 }
 
-// #@@range_begin(register_handlers)
 void InitializeInterrupt() {
   auto set_idt_entry = [](int irq, auto handler) {
     SetIDTEntry(idt[irq],
@@ -111,7 +106,13 @@ void InitializeInterrupt() {
                 kKernelCS);
   };
   set_idt_entry(InterruptVector::kXHCI, IntHandlerXHCI);
-  set_idt_entry(InterruptVector::kLAPICTimer, IntHandlerLAPICTimer);
+  // #@@range_begin(set_idt)
+  SetIDTEntry(idt[InterruptVector::kLAPICTimer],
+              MakeIDTAttr(DescriptorType::kInterruptGate, 0 /* DPL */,
+                          true /* present */, kISTForTimer /* IST */),
+              reinterpret_cast<uint64_t>(IntHandlerLAPICTimer),
+              kKernelCS);
+  // #@@range_end(set_idt)
   set_idt_entry(0,  IntHandlerDE);
   set_idt_entry(1,  IntHandlerDB);
   set_idt_entry(3,  IntHandlerBP);
@@ -132,4 +133,3 @@ void InitializeInterrupt() {
   set_idt_entry(20, IntHandlerVE);
   LoadIDT(sizeof(idt) - 1, reinterpret_cast<uintptr_t>(&idt[0]));
 }
-// #@@range_end(register_handlers)
