@@ -1,4 +1,4 @@
-# EUFI-OS
+# UEFI-OS
 
 ## ファイル構成
 
