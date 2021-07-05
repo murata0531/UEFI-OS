@@ -4,6 +4,16 @@
 #include "console.hpp"
 #include "logger.hpp"
 
+// #@@range_begin(erase_if)
+namespace {
+  template <class T, class U>
+  void EraseIf(T& c, const U& pred) {
+    auto it = std::remove_if(c.begin(), c.end(), pred);
+    c.erase(it, c.end());
+  }
+} // namespace
+// #@@range_end(erase_if)
+
 Layer::Layer(unsigned int id) : id_{id} {
 }
 
@@ -62,6 +72,17 @@ Layer& LayerManager::NewLayer() {
   ++latest_id_;
   return *layers_.emplace_back(new Layer{latest_id_});
 }
+
+// #@@range_begin(remove_layer)
+void LayerManager::RemoveLayer(unsigned int id) {
+  Hide(id);
+
+  auto pred = [id](const std::unique_ptr<Layer>& elem) {
+    return elem->ID() == id;
+  };
+  EraseIf(layers_, pred);
+}
+// #@@range_end(remove_layer)
 
 void LayerManager::Draw(const Rectangle<int>& area) const {
   for (auto layer : layer_stack_) {
