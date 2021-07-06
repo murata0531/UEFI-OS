@@ -9,9 +9,9 @@
 #include  <Protocol/DiskIo2.h>
 #include  <Protocol/BlockIo.h>
 #include  <Guid/FileInfo.h>
-#include  "frame_buffer_config.hpp"
-#include  "memory_map.hpp"
-#include  "elf.hpp"
+#include  "../kernel/frame_buffer_config.hpp"
+#include  "../kernelmemory_map.hpp"
+#include  "../kernel/elf.hpp"
 
 EFI_STATUS GetMemoryMap(struct MemoryMap* map) {
   if (map->buffer == NULL) {
