@@ -248,7 +248,6 @@ SYSCALL(ReadEvent) {
       app_events[i].arg.mouse_move.buttons = msg->arg.mouse_move.buttons;
       ++i;
       break;
-    // #@@range_begin(mouse_button_event)
     case Message::kMouseButton:
       app_events[i].type = AppEvent::kMouseButton;
       app_events[i].arg.mouse_button.x = msg->arg.mouse_button.x;
@@ -257,7 +256,16 @@ SYSCALL(ReadEvent) {
       app_events[i].arg.mouse_button.button = msg->arg.mouse_button.button;
       ++i;
       break;
-    // #@@range_end(mouse_button_event)
+    // #@@range_begin(handle_timeout)
+    case Message::kTimerTimeout:
+      if (msg->arg.timer.value < 0) {
+        app_events[i].type = AppEvent::kTimerTimeout;
+        app_events[i].arg.timer.timeout = msg->arg.timer.timeout;
+        app_events[i].arg.timer.value = -msg->arg.timer.value;
+        ++i;
+      }
+      break;
+    // #@@range_end(handle_timeout)
     default:
       Log(kInfo, "uncaught event type: %u\n", msg->type);
     }
@@ -266,13 +274,37 @@ SYSCALL(ReadEvent) {
   return { i, 0 };
 }
 
+// #@@range_begin(create_timer)
+SYSCALL(CreateTimer) {
+  const unsigned int mode = arg1;
+  const int timer_value = arg2;
+  if (timer_value <= 0) {
+    return { 0, EINVAL };
+  }
+
+  __asm__("cli");
+  const uint64_t task_id = task_manager->CurrentTask().ID();
+  __asm__("sti");
+
+  unsigned long timeout = arg3 * kTimerFreq / 1000;
+  if (mode & 1) { // relative
+    timeout += timer_manager->CurrentTick();
+  }
+
+  __asm__("cli");
+  timer_manager->AddTimer(Timer{timeout, -timer_value, task_id});
+  __asm__("sti");
+  return { timeout * 1000 / kTimerFreq, 0 };
+}
+// #@@range_end(create_timer)
+
 #undef SYSCALL
 
 } // namespace syscall
 
 using SyscallFuncType = syscall::Result (uint64_t, uint64_t, uint64_t,
                                          uint64_t, uint64_t, uint64_t);
-extern "C" std::array<SyscallFuncType*, 0xb> syscall_table{
+extern "C" std::array<SyscallFuncType*, 0xc> syscall_table{
   /* 0x00 */ syscall::LogString,
   /* 0x01 */ syscall::PutString,
   /* 0x02 */ syscall::Exit,
@@ -284,6 +316,7 @@ extern "C" std::array<SyscallFuncType*, 0xb> syscall_table{
   /* 0x08 */ syscall::WinDrawLine,
   /* 0x09 */ syscall::CloseWindow,
   /* 0x0a */ syscall::ReadEvent,
+  /* 0x0b */ syscall::CreateTimer,
 };
 
 void InitializeSyscall() {
