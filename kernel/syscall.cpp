@@ -232,13 +232,22 @@ SYSCALL(ReadEvent) {
     }
 
     switch (msg->type) {
+    // #@@range_begin(read_key_push_event)
     case Message::kKeyPush:
       if (msg->arg.keyboard.keycode == 20 /* Q key */ &&
           msg->arg.keyboard.modifier & (kLControlBitMask | kRControlBitMask)) {
         app_events[i].type = AppEvent::kQuit;
         ++i;
+      } else {
+        app_events[i].type = AppEvent::kKeyPush;
+        app_events[i].arg.keypush.modifier = msg->arg.keyboard.modifier;
+        app_events[i].arg.keypush.keycode = msg->arg.keyboard.keycode;
+        app_events[i].arg.keypush.ascii = msg->arg.keyboard.ascii;
+        app_events[i].arg.keypush.press = msg->arg.keyboard.press;
+        ++i;
       }
       break;
+    // #@@range_end(read_key_push_event)
     case Message::kMouseMove:
       app_events[i].type = AppEvent::kMouseMove;
       app_events[i].arg.mouse_move.x = msg->arg.mouse_move.x;
@@ -256,7 +265,6 @@ SYSCALL(ReadEvent) {
       app_events[i].arg.mouse_button.button = msg->arg.mouse_button.button;
       ++i;
       break;
-    // #@@range_begin(handle_timeout)
     case Message::kTimerTimeout:
       if (msg->arg.timer.value < 0) {
         app_events[i].type = AppEvent::kTimerTimeout;
@@ -265,7 +273,6 @@ SYSCALL(ReadEvent) {
         ++i;
       }
       break;
-    // #@@range_end(handle_timeout)
     default:
       Log(kInfo, "uncaught event type: %u\n", msg->type);
     }
@@ -274,7 +281,6 @@ SYSCALL(ReadEvent) {
   return { i, 0 };
 }
 
-// #@@range_begin(create_timer)
 SYSCALL(CreateTimer) {
   const unsigned int mode = arg1;
   const int timer_value = arg2;
@@ -296,7 +302,6 @@ SYSCALL(CreateTimer) {
   __asm__("sti");
   return { timeout * 1000 / kTimerFreq, 0 };
 }
-// #@@range_end(create_timer)
 
 #undef SYSCALL
 
