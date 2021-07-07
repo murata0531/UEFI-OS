@@ -88,3 +88,32 @@ extern "C" void main(int argc, char** argv) {
   exit(0);
 }
 // #@@range_end(main)
+
+void DrawObj(uint64_t layer_id) {
+  // オブジェクト座標 vert を スクリーン座標 scr に変換（画面奥が Z+）
+  for (int i = 0; i < kCube.size(); i++) {
+    const double t = 6*kScale / (vert[i].z + 8*kScale);
+    scr[i].x = (vert[i].x * t) + kCanvasSize/2;
+    scr[i].y = (vert[i].y * t) + kCanvasSize/2;
+  }
+
+  for (;;) {
+    // 奥にある（= Z 座標が大きい）オブジェクトから順に描画
+    double* const zmax = max_element(centerz4.begin(), centerz4.end());
+    if (*zmax == numeric_limits<double>::lowest()) {
+      break;
+    }
+    const int sur = zmax - centerz4.begin();
+    centerz4[sur] = numeric_limits<double>::lowest();
+
+    // 法線ベクトルがこっちを向いてる面だけ描画
+    const auto v0 = vert[kSurface[sur][0]],
+               v1 = vert[kSurface[sur][1]],
+               v2 = vert[kSurface[sur][2]];
+    const auto e0x = v1.x - v0.x, e0y = v1.y - v0.y, // v0 --> v1
+               e1x = v2.x - v1.x, e1y = v2.y - v1.y; // v1 --> v2
+    if (e0x * e1y <= e0y * e1x) {
+      DrawSurface(layer_id, sur);
+    }
+  }
+}
