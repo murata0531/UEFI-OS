@@ -36,3 +36,18 @@ void DrawBlocks(uint64_t layer_id) {
     }
   }
 }
+
+void DrawBar(uint64_t layer_id, int bar_x) {
+  SyscallWinFillRectangle(layer_id,
+                          4 + bar_x, 24 + kBarY,
+                          kBarWidth, kBarHeight, 0xffffff);
+}
+
+void DrawBall(uint64_t layer_id, int x, int y) {
+  SyscallWinFillRectangle(layer_id,
+                          4 + x - kBallRadius, 24 + y - kBallRadius,
+                          2 * kBallRadius, 2 * kBallRadius, 0x007f00);
+  SyscallWinFillRectangle(layer_id,
+                          4 + x - kBallRadius/2, 24 + y - kBallRadius/2,
+                          kBallRadius, kBallRadius, 0x00ff00);
+}
