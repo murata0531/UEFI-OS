@@ -148,12 +148,10 @@ extern "C" void KernelMainNewStack(
   acpi::Initialize(acpi_table);
   InitializeLAPICTimer();
 
-  // #@@range_begin(add_timer)
   const int kTextboxCursorTimer = 1;
   const int kTimer05Sec = static_cast<int>(kTimerFreq * 0.5);
   timer_manager->AddTimer(Timer{kTimer05Sec, kTextboxCursorTimer, 1});
   bool textbox_cursor_visible = false;
-  // #@@range_end(add_timer)
 
   InitializeSyscall();
 
@@ -211,9 +209,13 @@ extern "C" void KernelMainNewStack(
       }
       break;
     case Message::kKeyPush:
+      // #@@range_begin(if_press_main)
       if (auto act = active_layer->GetActive(); act == text_window_layer_id) {
-        InputTextWindow(msg->arg.keyboard.ascii);
+        if (msg->arg.keyboard.press) {
+          InputTextWindow(msg->arg.keyboard.ascii);
+        }
       } else {
+      // #@@range_end(if_press_main)
         __asm__("cli");
         auto task_it = layer_task_map->find(act);
         __asm__("sti");
