@@ -117,3 +117,40 @@ void DrawObj(uint64_t layer_id) {
     }
   }
 }
+
+void DrawSurface(uint64_t layer_id, int sur) {
+  const auto& surface = kSurface[sur]; // 描画する面
+  int ymin = kCanvasSize, ymax = 0; // 画面の描画範囲 [ymin, ymax]
+  int y2x_up[kCanvasSize], y2x_down[kCanvasSize]; // Y, X 座標の組
+  for (int i = 0; i < surface.size(); i++) {
+    const auto p0 = scr[surface[(i + 3) % 4]], p1 = scr[surface[i]];
+    ymin = min(ymin, p1.y);
+    ymax = max(ymax, p1.y);
+    if (p0.y == p1.y) {
+      continue;
+    }
+
+    int* y2x;
+    int x0, y0, y1, dx;
+    if (p0.y < p1.y) { // p0 --> p1 は上る方向
+      y2x = y2x_up;
+      x0 = p0.x; y0 = p0.y; y1 = p1.y; dx = p1.x - p0.x;
+    } else { // p0 --> p1 は下る方向
+      y2x = y2x_down;
+      x0 = p1.x; y0 = p1.y; y1 = p0.y; dx = p0.x - p1.x;
+    }
+
+    const double m = static_cast<double>(dx) / (y1 - y0);
+    const auto roundish = dx >= 0 ? static_cast<double(*)(double)>(floor)
+                                  : static_cast<double(*)(double)>(ceil);
+    for (int y = y0; y <= y1; y++) {
+      y2x[y] = roundish(m * (y - y0) + x0);
+    }
+  }
+
+  for (int y = ymin; y <= ymax; y++) {
+    int p0x = min(y2x_up[y], y2x_down[y]);
+    int p1x = max(y2x_up[y], y2x_down[y]);
+    SyscallWinFillRectangle(layer_id, 4 + p0x, 24 + y, p1x - p0x + 1, 1, kColor[sur]);
+  }
+}
