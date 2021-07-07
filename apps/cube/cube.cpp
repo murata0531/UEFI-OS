@@ -154,3 +154,24 @@ void DrawSurface(uint64_t layer_id, int sur) {
     SyscallWinFillRectangle(layer_id, 4 + p0x, 24 + y, p1x - p0x + 1, 1, kColor[sur]);
   }
 }
+
+bool Sleep(unsigned long ms) {
+  static unsigned long prev_timeout = 0;
+  if (prev_timeout == 0) {
+    const auto timeout = SyscallCreateTimer(TIMER_ONESHOT_REL, 1, ms);
+    prev_timeout = timeout.value;
+  } else {
+    prev_timeout += ms;
+    SyscallCreateTimer(TIMER_ONESHOT_ABS, 1, prev_timeout);
+  }
+
+  AppEvent events[1];
+  for (;;) {
+    SyscallReadEvent(events, 1);
+    if (events[0].type == AppEvent::kTimerTimeout) {
+      return false;
+    } else if (events[0].type == AppEvent::kQuit) {
+      return true;
+    }
+  }
+}
