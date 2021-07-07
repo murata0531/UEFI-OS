@@ -45,3 +45,46 @@ extern "C" void main(int argc, char** argv) {
   if (err_openwin) {
     exit(err_openwin);
   }
+
+  int thx = 0, thy = 0, thz = 0;
+  const double to_rad = 3.14159265358979323 / 0x8000;
+  for (;;) {
+    // 立方体を X, Y, Z 軸回りに回転
+    thx = (thx + 182) & 0xffff;
+    thy = (thy + 273) & 0xffff;
+    thz = (thz + 364) & 0xffff;
+    const double xp = cos(thx * to_rad), xa = sin(thx * to_rad);
+    const double yp = cos(thy * to_rad), ya = sin(thy * to_rad);
+    const double zp = cos(thz * to_rad), za = sin(thz * to_rad);
+    for (int i = 0; i < kCube.size(); i++) {
+      const auto cv = kCube[i];
+      const double zt = kScale*cv.z * xp + kScale*cv.y * xa;
+      const double yt = kScale*cv.y * xp - kScale*cv.z * xa;
+      const double xt = kScale*cv.x * yp + zt          * ya;
+      vert[i].z       = zt          * yp - kScale*cv.x * ya;
+      vert[i].x       = xt          * zp - yt          * za;
+      vert[i].y       = yt          * zp + xt          * za;
+    }
+
+    // 面中心の Z 座標（を 4 倍した値）を 6 面について計算
+    for (int sur = 0; sur < kSurface.size(); ++sur) {
+      centerz4[sur] = 0;
+      for (int i = 0; i < kSurface[sur].size(); ++i) {
+        centerz4[sur] += vert[kSurface[sur][i]].z;
+      }
+    }
+
+    // 画面を一旦クリアし，立方体を描画
+    SyscallWinFillRectangle(layer_id | LAYER_NO_REDRAW,
+                            4, 24, kCanvasSize, kCanvasSize, 0);
+    DrawObj(layer_id | LAYER_NO_REDRAW);
+    SyscallWinRedraw(layer_id);
+    if (Sleep(50)) {
+      break;
+    }
+  }
+
+  SyscallCloseWindow(layer_id);
+  exit(0);
+}
+// #@@range_end(main)
