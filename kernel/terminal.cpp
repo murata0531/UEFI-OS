@@ -10,6 +10,7 @@
 #include "elf.hpp"
 #include "memory_manager.hpp"
 #include "paging.hpp"
+#include "timer.hpp"
 
 namespace {
 
@@ -555,10 +556,19 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
   Task& task = task_manager->CurrentTask();
   Terminal* terminal = new Terminal{task_id};
   layer_manager->Move(terminal->LayerID(), {100, 200});
-  active_layer->Activate(terminal->LayerID());
   layer_task_map->insert(std::make_pair(terminal->LayerID(), task_id));
+  active_layer->Activate(terminal->LayerID());
   (*terminals)[task_id] = terminal;
   __asm__("sti");
+
+  // #@@range_begin(terminal_loop)
+  auto add_blink_timer = [task_id](unsigned long t){
+    timer_manager->AddTimer(Timer{t + static_cast<int>(kTimerFreq * 0.5),
+                                  1, task_id});
+  };
+  add_blink_timer(timer_manager->CurrentTick());
+
+  bool window_isactive = false;
 
   while (true) {
     __asm__("cli");
@@ -572,7 +582,8 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
 
     switch (msg->type) {
     case Message::kTimerTimeout:
-      {
+      add_blink_timer(msg->arg.timer.timeout);
+      if (window_isactive) {
         const auto area = terminal->BlinkCursor();
         Message msg = MakeLayerMessage(
             task_id, terminal->LayerID(), LayerOperation::DrawArea, area);
@@ -581,13 +592,12 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
         __asm__("sti");
       }
       break;
+  // #@@range_end(terminal_loop)
     case Message::kKeyPush:
-      // #@@range_begin(if_press)
       if (msg->arg.keyboard.press) {
         const auto area = terminal->InputKey(msg->arg.keyboard.modifier,
                                              msg->arg.keyboard.keycode,
                                              msg->arg.keyboard.ascii);
-      // #@@range_end(if_press)
         Message msg = MakeLayerMessage(
             task_id, terminal->LayerID(), LayerOperation::DrawArea, area);
         __asm__("cli");
@@ -595,8 +605,13 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
         __asm__("sti");
       }
       break;
+  // #@@range_begin(case_winact)
+    case Message::kWindowActive:
+      window_isactive = msg->arg.window_active.activate;
+      break;
     default:
       break;
     }
   }
+  // #@@range_end(case_winact)
 }
