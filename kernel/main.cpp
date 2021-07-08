@@ -158,14 +158,16 @@ extern "C" void KernelMainNewStack(
   InitializeTask();
   Task& main_task = task_manager->CurrentTask();
   terminals = new std::map<uint64_t, Terminal*>;
-  const uint64_t task_terminal_id = task_manager->NewTask()
-    .InitContext(TaskTerminal, 0)
-    .Wakeup()
-    .ID();
 
+  // #@@range_begin(start_term_after_mouse)
   usb::xhci::Initialize();
   InitializeKeyboard();
   InitializeMouse();
+
+  task_manager->NewTask()
+    .InitContext(TaskTerminal, 0)
+    .Wakeup();
+  // #@@range_end(start_term_after_mouse)
 
   char str[128];
 
@@ -202,13 +204,8 @@ extern "C" void KernelMainNewStack(
         textbox_cursor_visible = !textbox_cursor_visible;
         DrawTextCursor(textbox_cursor_visible);
         layer_manager->Draw(text_window_layer_id);
-
-        __asm__("cli");
-        task_manager->SendMessage(task_terminal_id, *msg);
-        __asm__("sti");
       }
       break;
-      // #@@range_begin(new_term)
     case Message::kKeyPush:
       if (auto act = active_layer->GetActive(); act == text_window_layer_id) {
         if (msg->arg.keyboard.press) {
@@ -220,7 +217,6 @@ extern "C" void KernelMainNewStack(
           .InitContext(TaskTerminal, 0)
           .Wakeup();
       } else {
-      // #@@range_end(new_term)
         __asm__("cli");
         auto task_it = layer_task_map->find(act);
         __asm__("sti");
