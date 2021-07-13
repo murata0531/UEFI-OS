@@ -13,8 +13,8 @@
 
 ## ビルド方法
 
-[EUFI-OS-build リポジトリ](https://github.com/murata0531/UEFI-OS-build.git) に OS をビルドするためのスクリプトがある。
-EUFI-OS-build の手順に沿って開発ツールを導入した後、devenv/buildenv.sh を読み込むことでビルド可能。
+[UEFI-OS-build リポジトリ](https://github.com/murata0531/UEFI-OS-build.git) に OS をビルドするためのスクリプトがある。
+UEFI-OS-build の手順に沿って開発ツールを導入した後、devenv/buildenv.sh を読み込むことでビルド可能。
 （devenv/buildenv.sh により環境変数 CPPFLAGS などが適切に設定される。）
 
 
