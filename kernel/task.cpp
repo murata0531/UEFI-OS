@@ -78,6 +78,10 @@ std::optional<Message> Task::ReceiveMessage() {
   return m;
 }
 
+std::vector<std::unique_ptr<fat::FileDescriptor>>& Task::Files() {
+  return files_;
+}
+
 TaskManager::TaskManager() {
   Task& task = NewTask()
     .SetLevel(current_level_)
@@ -241,9 +245,7 @@ void InitializeTask() {
   __asm__("sti");
 }
 
-// #@@range_begin(get_os_stack_ptr)
 __attribute__((no_caller_saved_registers))
 extern "C" uint64_t GetCurrentTaskOSStackPointer() {
   return task_manager->CurrentTask().OSStackPointer();
 }
-// #@@range_end(get_os_stack_ptr)
