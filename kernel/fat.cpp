@@ -1,12 +1,12 @@
 #include "fat.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <cctype>
 #include <utility>
 
 namespace {
 
-// #@@range_begin(next_path_element)
 std::pair<const char*, bool>
 NextPathElement(const char* path, char* path_elem) {
   const char* next_slash = strchr(path, '/');
@@ -20,7 +20,6 @@ NextPathElement(const char* path, char* path_elem) {
   path_elem[elem_len] = '\0';
   return { &next_slash[1], true };
 }
-// #@@range_end(next_path_element)
 
 } // namespace
 
@@ -59,7 +58,6 @@ void ReadName(const DirectoryEntry& entry, char* base, char* ext) {
   }
 }
 
-// #@@range_begin(format_name)
 void FormatName(const DirectoryEntry& entry, char* dest) {
   char ext[5] = ".";
   ReadName(entry, dest, &ext[1]);
@@ -67,7 +65,6 @@ void FormatName(const DirectoryEntry& entry, char* dest) {
     strcat(dest, ext);
   }
 }
-// #@@range_end(format_name)
 
 unsigned long NextCluster(unsigned long cluster) {
   uintptr_t fat_offset =
@@ -82,7 +79,6 @@ unsigned long NextCluster(unsigned long cluster) {
   return next;
 }
 
-// #@@range_begin(find_file)
 std::pair<DirectoryEntry*, bool>
 FindFile(const char* path, unsigned long directory_cluster) {
   if (path[0] == '/') {
@@ -119,7 +115,6 @@ FindFile(const char* path, unsigned long directory_cluster) {
 not_found:
   return { nullptr, post_slash };
 }
-// #@@range_end(find_file)
 
 bool NameIsEqual(const DirectoryEntry& entry, const char* name) {
   unsigned char name83[11];
@@ -159,5 +154,38 @@ size_t LoadFile(void* buf, size_t len, const DirectoryEntry& entry) {
   }
   return p - buf_uint8;
 }
+
+// #@@range_begin(file_descriptor_ctor)
+FileDescriptor::FileDescriptor(DirectoryEntry& fat_entry)
+    : fat_entry_{fat_entry} {
+}
+// #@@range_end(file_descriptor_ctor)
+
+// #@@range_begin(file_descriptor_read)
+size_t FileDescriptor::Read(void* buf, size_t len) {
+  if (rd_cluster_ == 0) {
+    rd_cluster_ = fat_entry_.FirstCluster();
+  }
+  uint8_t* buf8 = reinterpret_cast<uint8_t*>(buf);
+  len = std::min(len, fat_entry_.file_size - rd_off_);
+
+  size_t total = 0;
+  while (total < len) {
+    uint8_t* sec = GetSectorByCluster<uint8_t>(rd_cluster_);
+    size_t n = std::min(len - total, bytes_per_cluster - rd_cluster_off_);
+    memcpy(&buf8[total], &sec[rd_cluster_off_], n);
+    total += n;
+
+    rd_cluster_off_ += n;
+    if (rd_cluster_off_ == bytes_per_cluster) {
+      rd_cluster_ = NextCluster(rd_cluster_);
+      rd_cluster_off_ = 0;
+    }
+  }
+
+  rd_off_ += total;
+  return total;
+}
+// #@@range_end(file_descriptor_read)
 
 } // namespace fat
