@@ -44,15 +44,13 @@ class Task {
   Task& Wakeup();
   void SendMessage(const Message& msg);
   std::optional<Message> ReceiveMessage();
-  std::vector<std::unique_ptr<fat::FileDescriptor>>& Files();
+  std::vector<std::unique_ptr<::FileDescriptor>>& Files();
 
   int Level() const { return level_; }
   bool Running() const { return running_; }
 
-  // #@@range_begin(task_fields)
  private:
   uint64_t id_;
-  // #@@range_end(task_fields)
   std::vector<uint64_t> stack_;
   alignas(16) TaskContext context_;
   uint64_t os_stack_ptr_;
@@ -60,7 +58,7 @@ class Task {
   unsigned int level_{kDefaultLevel};
   bool running_{false};
   // #@@range_begin(task_files)
-  std::vector<std::unique_ptr<fat::FileDescriptor>> files_{};
+  std::vector<std::unique_ptr<::FileDescriptor>> files_{};
   // #@@range_end(task_files)
 
   Task& SetLevel(int level) { level_ = level; return *this; }
