@@ -712,3 +712,31 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
     }
   }
 }
+
+// #@@range_begin(term_fd_ctor)
+TerminalFileDescriptor::TerminalFileDescriptor(Task& task, Terminal& term)
+    : task_{task}, term_{term} {
+}
+// #@@range_end(term_fd_ctor)
+
+// #@@range_begin(term_fd_read)
+size_t TerminalFileDescriptor::Read(void* buf, size_t len) {
+  char* bufc = reinterpret_cast<char*>(buf);
+
+  while (true) {
+    __asm__("cli");
+    auto msg = task_.ReceiveMessage();
+    if (!msg) {
+      task_.Sleep();
+      continue;
+    }
+    __asm__("sti");
+
+    if (msg->type == Message::kKeyPush && msg->arg.keyboard.press) {
+      bufc[0] = msg->arg.keyboard.ascii;
+      term_.Print(bufc, 1);
+      return 1;
+    }
+  }
+}
+// #@@range_end(term_fd_read)
