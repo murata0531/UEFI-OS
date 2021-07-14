@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <cstddef>
 
+#include "file.hpp"
+
 namespace fat {
 
 struct BPB {
@@ -141,11 +143,11 @@ bool NameIsEqual(const DirectoryEntry& entry, const char* name);
  */
 size_t LoadFile(void* buf, size_t len, const DirectoryEntry& entry);
 
-// #@@range_begin(file_descriptor)
-class FileDescriptor {
+// #@@range_begin(fat_fd)
+class FileDescriptor : public ::FileDescriptor {
  public:
   explicit FileDescriptor(DirectoryEntry& fat_entry);
-  size_t Read(void* buf, size_t len);
+  size_t Read(void* buf, size_t len) override;
 
  private:
   DirectoryEntry& fat_entry_;
@@ -153,6 +155,6 @@ class FileDescriptor {
   unsigned long rd_cluster_ = 0;
   size_t rd_cluster_off_ = 0;
 };
-// #@@range_end(file_descriptor)
+// #@@range_end(fat_fd)
 
 } // namespace fat
