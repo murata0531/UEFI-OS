@@ -265,3 +265,22 @@ unsigned long ExtendCluster(unsigned long eoc_cluster, size_t n) {
   return current;
 }
 // #@@range_end(extend_cluster)
+
+// #@@range_begin(set_filename)
+void SetFileName(DirectoryEntry& entry, const char* name) {
+  const char* dot_pos = strrchr(name, '.');
+  memset(entry.name, ' ', 8+3);
+  if (dot_pos) {
+    for (int i = 0; i < 8 && i < dot_pos - name; ++i) {
+      entry.name[i] = toupper(name[i]);
+    }
+    for (int i = 0; i < 3 && dot_pos[i + 1]; ++i) {
+      entry.name[8 + i] = toupper(dot_pos[i + 1]);
+    }
+  } else {
+    for (int i = 0; i < 8 && name[i]; ++i) {
+      entry.name[i] = toupper(name[i]);
+    }
+  }
+}
+// #@@range_end(set_filename)
