@@ -528,9 +528,12 @@ Error Terminal::ExecuteFile(const fat::DirectoryEntry& file_entry, char* command
     return err;
   }
 
-  // #@@range_begin(add_stdin_fd)
-  task.Files().push_back(
-      std::make_unique<TerminalFileDescriptor>(task, *this));
+  // #@@range_begin(register_stdfds)
+  for (int i = 0; i < 3; ++i) {
+    task.Files().push_back(
+        std::make_unique<TerminalFileDescriptor>(task, *this));
+  }
+  // #@@range_end(register_stdfds)
 
   auto entry_addr = elf_header->e_entry;
   int ret = CallApp(argc.value, argv, 3 << 3 | 3, entry_addr,
