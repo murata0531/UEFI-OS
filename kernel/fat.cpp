@@ -219,3 +219,26 @@ WithError<DirectoryEntry*> CreateFile(const char* path) {
   return { dir, MAKE_ERROR(Error::kSuccess) };
 }
 // #@@range_end(fat_create_file)
+
+// #@@range_begin(allocate_entry)
+DirectoryEntry* AllocateEntry(unsigned long dir_cluster) {
+  while (true) {
+    auto dir = GetSectorByCluster<DirectoryEntry>(dir_cluster);
+    for (int i = 0; i < bytes_per_cluster / sizeof(DirectoryEntry); ++i) {
+      if (dir[i].name[0] == 0 || dir[i].name[0] == 0xe5) {
+        return &dir[i];
+      }
+    }
+    auto next = NextCluster(dir_cluster);
+    if (next == kEndOfClusterchain) {
+      break;
+    }
+    dir_cluster = next;
+  }
+
+  dir_cluster = ExtendCluster(dir_cluster, 1);
+  auto dir = GetSectorByCluster<DirectoryEntry>(dir_cluster);
+  memset(dir, 0, bytes_per_cluster);
+  return &dir[0];
+}
+// #@@range_end(allocate_entry)
