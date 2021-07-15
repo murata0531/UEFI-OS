@@ -67,13 +67,8 @@ void FormatName(const DirectoryEntry& entry, char* dest) {
 }
 
 unsigned long NextCluster(unsigned long cluster) {
-  uintptr_t fat_offset =
-    boot_volume_image->reserved_sector_count *
-    boot_volume_image->bytes_per_sector;
-  uint32_t* fat = reinterpret_cast<uint32_t*>(
-      reinterpret_cast<uintptr_t>(boot_volume_image) + fat_offset);
-  uint32_t next = fat[cluster];
-  if (next >= 0x0ffffff8ul) {
+  uint32_t next = GetFAT()[cluster];
+  if (IsEndOfClusterchain(next)) {
     return kEndOfClusterchain;
   }
   return next;
@@ -155,36 +150,86 @@ size_t LoadFile(void* buf, size_t len, const DirectoryEntry& entry) {
   return p - buf_uint8;
 }
 
-FileDescriptor::FileDescriptor(DirectoryEntry& fat_entry)
-    : fat_entry_{fat_entry} {
+// #@@range_begin(is_eoc)
+bool IsEndOfClusterchain(unsigned long cluster) {
+  return cluster >= 0x0ffffff8ul;
 }
+// #@@range_end(is_eoc)
 
-size_t FileDescriptor::Read(void* buf, size_t len) {
-  if (rd_cluster_ == 0) {
-    rd_cluster_ = fat_entry_.FirstCluster();
+// #@@range_begin(get_fat)
+uint32_t* GetFAT() {
+  uintptr_t fat_offset =
+    boot_volume_image->reserved_sector_count *
+    boot_volume_image->bytes_per_sector;
+  return reinterpret_cast<uint32_t*>(
+      reinterpret_cast<uintptr_t>(boot_volume_image) + fat_offset);
+}
+// #@@range_end(get_fat)
+
+// #@@range_begin(extend_cluster)
+unsigned long ExtendCluster(unsigned long eoc_cluster, size_t n) {
+  uint32_t* fat = GetFAT();
+  while (!IsEndOfClusterchain(fat[eoc_cluster])) {
+    eoc_cluster = fat[eoc_cluster];
   }
-  uint8_t* buf8 = reinterpret_cast<uint8_t*>(buf);
-  len = std::min(len, fat_entry_.file_size - rd_off_);
 
-  size_t total = 0;
-  while (total < len) {
-    uint8_t* sec = GetSectorByCluster<uint8_t>(rd_cluster_);
-    size_t n = std::min(len - total, bytes_per_cluster - rd_cluster_off_);
-    memcpy(&buf8[total], &sec[rd_cluster_off_], n);
-    total += n;
+  size_t num_allocated = 0;
+  auto current = eoc_cluster;
 
-    rd_cluster_off_ += n;
-    if (rd_cluster_off_ == bytes_per_cluster) {
-      rd_cluster_ = NextCluster(rd_cluster_);
-      rd_cluster_off_ = 0;
+  for (unsigned long candidate = 2; num_allocated < n; ++candidate) {
+    if (fat[candidate] != 0) { // candidate cluster is not free
+      continue;
+    }
+    fat[current] = candidate;
+    current = candidate;
+    ++num_allocated;
+  }
+  fat[current] = kEndOfClusterchain;
+  return current;
+}
+// #@@range_end(extend_cluster)
+
+// #@@range_begin(allocate_entry)
+DirectoryEntry* AllocateEntry(unsigned long dir_cluster) {
+  while (true) {
+    auto dir = GetSectorByCluster<DirectoryEntry>(dir_cluster);
+    for (int i = 0; i < bytes_per_cluster / sizeof(DirectoryEntry); ++i) {
+      if (dir[i].name[0] == 0 || dir[i].name[0] == 0xe5) {
+        return &dir[i];
+      }
+    }
+    auto next = NextCluster(dir_cluster);
+    if (next == kEndOfClusterchain) {
+      break;
+    }
+    dir_cluster = next;
+  }
+
+  dir_cluster = ExtendCluster(dir_cluster, 1);
+  auto dir = GetSectorByCluster<DirectoryEntry>(dir_cluster);
+  memset(dir, 0, bytes_per_cluster);
+  return &dir[0];
+}
+// #@@range_end(allocate_entry)
+
+// #@@range_begin(set_filename)
+void SetFileName(DirectoryEntry& entry, const char* name) {
+  const char* dot_pos = strrchr(name, '.');
+  memset(entry.name, ' ', 8+3);
+  if (dot_pos) {
+    for (int i = 0; i < 8 && i < dot_pos - name; ++i) {
+      entry.name[i] = toupper(name[i]);
+    }
+    for (int i = 0; i < 3 && dot_pos[i + 1]; ++i) {
+      entry.name[8 + i] = toupper(dot_pos[i + 1]);
+    }
+  } else {
+    for (int i = 0; i < 8 && name[i]; ++i) {
+      entry.name[i] = toupper(name[i]);
     }
   }
-
-  rd_off_ += total;
-  return total;
 }
-
-} // namespace fat
+// #@@range_end(set_filename)
 
 // #@@range_begin(fat_create_file)
 WithError<DirectoryEntry*> CreateFile(const char* path) {
@@ -220,67 +265,33 @@ WithError<DirectoryEntry*> CreateFile(const char* path) {
 }
 // #@@range_end(fat_create_file)
 
-// #@@range_begin(allocate_entry)
-DirectoryEntry* AllocateEntry(unsigned long dir_cluster) {
-  while (true) {
-    auto dir = GetSectorByCluster<DirectoryEntry>(dir_cluster);
-    for (int i = 0; i < bytes_per_cluster / sizeof(DirectoryEntry); ++i) {
-      if (dir[i].name[0] == 0 || dir[i].name[0] == 0xe5) {
-        return &dir[i];
-      }
-    }
-    auto next = NextCluster(dir_cluster);
-    if (next == kEndOfClusterchain) {
-      break;
-    }
-    dir_cluster = next;
-  }
-
-  dir_cluster = ExtendCluster(dir_cluster, 1);
-  auto dir = GetSectorByCluster<DirectoryEntry>(dir_cluster);
-  memset(dir, 0, bytes_per_cluster);
-  return &dir[0];
+FileDescriptor::FileDescriptor(DirectoryEntry& fat_entry)
+    : fat_entry_{fat_entry} {
 }
-// #@@range_end(allocate_entry)
 
-// #@@range_begin(extend_cluster)
-unsigned long ExtendCluster(unsigned long eoc_cluster, size_t n) {
-  uint32_t* fat = GetFAT();
-  while (!IsEndOfClusterchain(fat[eoc_cluster])) {
-    eoc_cluster = fat[eoc_cluster];
+size_t FileDescriptor::Read(void* buf, size_t len) {
+  if (rd_cluster_ == 0) {
+    rd_cluster_ = fat_entry_.FirstCluster();
   }
+  uint8_t* buf8 = reinterpret_cast<uint8_t*>(buf);
+  len = std::min(len, fat_entry_.file_size - rd_off_);
 
-  size_t num_allocated = 0;
-  auto current = eoc_cluster;
+  size_t total = 0;
+  while (total < len) {
+    uint8_t* sec = GetSectorByCluster<uint8_t>(rd_cluster_);
+    size_t n = std::min(len - total, bytes_per_cluster - rd_cluster_off_);
+    memcpy(&buf8[total], &sec[rd_cluster_off_], n);
+    total += n;
 
-  for (unsigned long candidate = 2; num_allocated < n; ++candidate) {
-    if (fat[candidate] != 0) { // candidate cluster is not free
-      continue;
+    rd_cluster_off_ += n;
+    if (rd_cluster_off_ == bytes_per_cluster) {
+      rd_cluster_ = NextCluster(rd_cluster_);
+      rd_cluster_off_ = 0;
     }
-    fat[current] = candidate;
-    current = candidate;
-    ++num_allocated;
   }
-  fat[current] = kEndOfClusterchain;
-  return current;
+
+  rd_off_ += total;
+  return total;
 }
-// #@@range_end(extend_cluster)
 
-// #@@range_begin(set_filename)
-void SetFileName(DirectoryEntry& entry, const char* name) {
-  const char* dot_pos = strrchr(name, '.');
-  memset(entry.name, ' ', 8+3);
-  if (dot_pos) {
-    for (int i = 0; i < 8 && i < dot_pos - name; ++i) {
-      entry.name[i] = toupper(name[i]);
-    }
-    for (int i = 0; i < 3 && dot_pos[i + 1]; ++i) {
-      entry.name[8 + i] = toupper(dot_pos[i + 1]);
-    }
-  } else {
-    for (int i = 0; i < 8 && name[i]; ++i) {
-      entry.name[i] = toupper(name[i]);
-    }
-  }
-}
-// #@@range_end(set_filename)
+} // namespace fat
