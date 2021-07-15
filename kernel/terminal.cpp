@@ -748,3 +748,10 @@ size_t TerminalFileDescriptor::Read(void* buf, size_t len) {
   }
 }
 // #@@range_end(term_fd_read)
+
+// #@@range_begin(term_fd_write)
+size_t TerminalFileDescriptor::Write(const void* buf, size_t len) {
+  term_.Print(reinterpret_cast<const char*>(buf), len);
+  return len;
+}
+// #@@range_end(term_fd_write)
