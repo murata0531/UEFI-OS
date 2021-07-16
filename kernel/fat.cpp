@@ -265,6 +265,24 @@ WithError<DirectoryEntry*> CreateFile(const char* path) {
 }
 // #@@range_end(fat_create_file)
 
+// #@@range_begin(alloc_chain)
+unsigned long AllocateClusterChain(size_t n) {
+  uint32_t* fat = GetFAT();
+  unsigned long first_cluster;
+  for (first_cluster = 2; ; ++first_cluster) {
+    if (fat[first_cluster] == 0) {
+      fat[first_cluster] = kEndOfClusterchain;
+      break;
+    }
+  }
+
+  if (n > 1) {
+    ExtendCluster(first_cluster, n - 1);
+  }
+  return first_cluster;
+}
+// #@@range_end(alloc_chain)
+
 FileDescriptor::FileDescriptor(DirectoryEntry& fat_entry)
     : fat_entry_{fat_entry} {
 }
