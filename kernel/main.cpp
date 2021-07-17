@@ -128,7 +128,7 @@ extern "C" void KernelMainNewStack(
   InitializeGraphics(frame_buffer_config_ref);
   InitializeConsole();
 
-  printk("Welcome \n");
+  printk("Welcome\n");
   SetLogLevel(kWarn);
 
   InitializeSegmentation();
@@ -157,7 +157,6 @@ extern "C" void KernelMainNewStack(
 
   InitializeTask();
   Task& main_task = task_manager->CurrentTask();
-  terminals = new std::map<uint64_t, Terminal*>;
 
   usb::xhci::Initialize();
   InitializeKeyboard();
