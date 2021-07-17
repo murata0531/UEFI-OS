@@ -40,7 +40,6 @@ SYSCALL(LogString) {
   return { len, 0 };
 }
 
-// #@@range_begin(put_string)
 SYSCALL(PutString) {
   const auto fd = arg1;
   const char* s = reinterpret_cast<const char*>(arg2);
@@ -58,7 +57,6 @@ SYSCALL(PutString) {
   }
   return { task.Files()[fd]->Write(s, len), 0 };
 }
-// #@@range_end(put_string)
 
 SYSCALL(Exit) {
   __asm__("cli");
@@ -318,7 +316,6 @@ namespace {
     return num_files;
   }
 
-  // #@@range_begin(create_file)
   std::pair<fat::DirectoryEntry*, int> CreateFile(const char* path) {
     auto [ file, err ] = fat::CreateFile(path);
     switch (err.Cause()) {
@@ -328,7 +325,6 @@ namespace {
     default: return { file, 0 };
     }
   }
-  // #@@range_end(create_file)
 } // namespace
 
 SYSCALL(OpenFile) {
@@ -338,7 +334,6 @@ SYSCALL(OpenFile) {
   auto& task = task_manager->CurrentTask();
   __asm__("sti");
 
-  // #@@range_begin(open_file)
   if (strcmp(path, "@stdin") == 0) {
     return { 0, 0 };
   }
@@ -360,7 +355,6 @@ SYSCALL(OpenFile) {
   size_t fd = AllocateFD(task);
   task.Files()[fd] = std::make_unique<fat::FileDescriptor>(*file);
   return { fd, 0 };
-  // #@@range_end(open_file)
 }
 
 SYSCALL(ReadFile) {
@@ -377,13 +371,27 @@ SYSCALL(ReadFile) {
   return { task.Files()[fd]->Read(buf, count), 0 };
 }
 
+// #@@range_begin(demand_pages)
+SYSCALL(DemandPages) {
+  const size_t num_pages = arg1;
+  // const int flags = arg2;
+  __asm__("cli");
+  auto& task = task_manager->CurrentTask();
+  __asm__("sti");
+
+  const uint64_t dp_end = task.DPagingEnd();
+  task.SetDPagingEnd(dp_end + 4096 * num_pages);
+  return { dp_end, 0 };
+}
+// #@@range_end(demand_pages)
+
 #undef SYSCALL
 
 } // namespace syscall
 
 using SyscallFuncType = syscall::Result (uint64_t, uint64_t, uint64_t,
                                          uint64_t, uint64_t, uint64_t);
-extern "C" std::array<SyscallFuncType*, 0xe> syscall_table{
+extern "C" std::array<SyscallFuncType*, 0xf> syscall_table{
   /* 0x00 */ syscall::LogString,
   /* 0x01 */ syscall::PutString,
   /* 0x02 */ syscall::Exit,
@@ -398,6 +406,7 @@ extern "C" std::array<SyscallFuncType*, 0xe> syscall_table{
   /* 0x0b */ syscall::CreateTimer,
   /* 0x0c */ syscall::OpenFile,
   /* 0x0d */ syscall::ReadFile,
+  /* 0x0e */ syscall::DemandPages,
 };
 
 void InitializeSyscall() {
