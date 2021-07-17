@@ -36,3 +36,16 @@ void ResetCR3() {
   SetCR3(reinterpret_cast<uint64_t>(&pml4_table[0]));
 }
 // #@@range_end(reset_cr3)
+
+// #@@range_begin(handle_pf)
+Error HandlePageFault(uint64_t error_code, uint64_t causal_addr) {
+  auto& task = task_manager->CurrentTask();
+  if (error_code & 1) { // P=1 かつページレベルの権限違反により例外が起きた
+    return MAKE_ERROR(Error::kAlreadyAllocated);
+  }
+  if (causal_addr < task.DPagingBegin() || task.DPagingEnd() <= causal_addr) {
+    return MAKE_ERROR(Error::kIndexOutOfRange);
+  }
+  return SetupPageMaps(LinearAddress4Level{causal_addr}, 1);
+}
+// #@@range_end(handle_pf)
