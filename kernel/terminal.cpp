@@ -538,8 +538,15 @@ Error Terminal::ExecuteFile(const fat::DirectoryEntry& file_entry, char* command
   }
   // #@@range_end(register_stdfds)
 
+  // #@@range_begin(set_dp_range)
+  const uint64_t elf_next_page =
+    (elf_last_addr + 4095) & 0xffff'ffff'ffff'f000;
+  task.SetDPagingBegin(elf_next_page);
+  task.SetDPagingEnd(elf_next_page);
+
   auto entry_addr = elf_header->e_entry;
   int ret = CallApp(argc.value, argv, 3 << 3 | 3, entry_addr,
+  // #@@range_end(set_dp_range)
                     stack_frame_addr.value + 4096 - 8,
                     &task.OSStackPointer());
 
