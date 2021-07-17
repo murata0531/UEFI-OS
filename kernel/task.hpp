@@ -45,6 +45,10 @@ class Task {
   void SendMessage(const Message& msg);
   std::optional<Message> ReceiveMessage();
   std::vector<std::unique_ptr<::FileDescriptor>>& Files();
+  uint64_t DPagingBegin() const;
+  void SetDPagingBegin(uint64_t v);
+  uint64_t DPagingEnd() const;
+  void SetDPagingEnd(uint64_t v);
 
   int Level() const { return level_; }
   bool Running() const { return running_; }
@@ -57,9 +61,10 @@ class Task {
   std::deque<Message> msgs_;
   unsigned int level_{kDefaultLevel};
   bool running_{false};
-  // #@@range_begin(task_files)
   std::vector<std::unique_ptr<::FileDescriptor>> files_{};
-  // #@@range_end(task_files)
+  // #@@range_begin(task_dpage_range)
+  uint64_t dpaging_begin_{0}, dpaging_end_{0};
+  // #@@range_end(task_dpage_range)
 
   Task& SetLevel(int level) { level_ = level; return *this; }
   Task& SetRunning(bool running) { running_ = running; return *this; }
