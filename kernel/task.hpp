@@ -69,9 +69,12 @@ class Task {
   unsigned int level_{kDefaultLevel};
   bool running_{false};
   std::vector<std::unique_ptr<::FileDescriptor>> files_{};
-  // #@@range_begin(task_dpage_range)
+  
+  // #@@range_begin(filemap_fields)
   uint64_t dpaging_begin_{0}, dpaging_end_{0};
-  // #@@range_end(task_dpage_range)
+  uint64_t file_map_end_{0};
+  std::vector<FileMapping> file_maps_{};
+  // #@@range_end(filemap_fields)
 
   Task& SetLevel(int level) { level_ = level; return *this; }
   Task& SetRunning(bool running) { running_ = running; return *this; }
