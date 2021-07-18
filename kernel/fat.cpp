@@ -128,35 +128,14 @@ bool NameIsEqual(const DirectoryEntry& entry, const char* name) {
   return memcmp(entry.name, name83, sizeof(name83)) == 0;
 }
 
-size_t LoadFile(void* buf, size_t len, const DirectoryEntry& entry) {
-  auto is_valid_cluster = [](uint32_t c) {
-    return c != 0 && c != fat::kEndOfClusterchain;
-  };
-  auto cluster = entry.FirstCluster();
-
-  const auto buf_uint8 = reinterpret_cast<uint8_t*>(buf);
-  const auto buf_end = buf_uint8 + len;
-  auto p = buf_uint8;
-
-  while (is_valid_cluster(cluster)) {
-    if (bytes_per_cluster >= buf_end - p) {
-      memcpy(p, GetSectorByCluster<uint8_t>(cluster), buf_end - p);
-      return len;
-    }
-    memcpy(p, GetSectorByCluster<uint8_t>(cluster), bytes_per_cluster);
-    p += bytes_per_cluster;
-    cluster = NextCluster(cluster);
-  }
-  return p - buf_uint8;
+size_t LoadFile(void* buf, size_t len, DirectoryEntry& entry) {
+  return FileDescriptor{entry}.Read(buf, len);
 }
 
-// #@@range_begin(is_eoc)
 bool IsEndOfClusterchain(unsigned long cluster) {
   return cluster >= 0x0ffffff8ul;
 }
-// #@@range_end(is_eoc)
 
-// #@@range_begin(get_fat)
 uint32_t* GetFAT() {
   uintptr_t fat_offset =
     boot_volume_image->reserved_sector_count *
@@ -164,9 +143,7 @@ uint32_t* GetFAT() {
   return reinterpret_cast<uint32_t*>(
       reinterpret_cast<uintptr_t>(boot_volume_image) + fat_offset);
 }
-// #@@range_end(get_fat)
 
-// #@@range_begin(extend_cluster)
 unsigned long ExtendCluster(unsigned long eoc_cluster, size_t n) {
   uint32_t* fat = GetFAT();
   while (!IsEndOfClusterchain(fat[eoc_cluster])) {
@@ -187,9 +164,7 @@ unsigned long ExtendCluster(unsigned long eoc_cluster, size_t n) {
   fat[current] = kEndOfClusterchain;
   return current;
 }
-// #@@range_end(extend_cluster)
 
-// #@@range_begin(allocate_entry)
 DirectoryEntry* AllocateEntry(unsigned long dir_cluster) {
   while (true) {
     auto dir = GetSectorByCluster<DirectoryEntry>(dir_cluster);
@@ -210,9 +185,7 @@ DirectoryEntry* AllocateEntry(unsigned long dir_cluster) {
   memset(dir, 0, bytes_per_cluster);
   return &dir[0];
 }
-// #@@range_end(allocate_entry)
 
-// #@@range_begin(set_filename)
 void SetFileName(DirectoryEntry& entry, const char* name) {
   const char* dot_pos = strrchr(name, '.');
   memset(entry.name, ' ', 8+3);
@@ -229,9 +202,7 @@ void SetFileName(DirectoryEntry& entry, const char* name) {
     }
   }
 }
-// #@@range_end(set_filename)
 
-// #@@range_begin(fat_create_file)
 WithError<DirectoryEntry*> CreateFile(const char* path) {
   auto parent_dir_cluster = fat::boot_volume_image->root_cluster;
   const char* filename = path;
@@ -263,9 +234,7 @@ WithError<DirectoryEntry*> CreateFile(const char* path) {
   dir->file_size = 0;
   return { dir, MAKE_ERROR(Error::kSuccess) };
 }
-// #@@range_end(fat_create_file)
 
-// #@@range_begin(alloc_chain)
 unsigned long AllocateClusterChain(size_t n) {
   uint32_t* fat = GetFAT();
   unsigned long first_cluster;
@@ -281,7 +250,6 @@ unsigned long AllocateClusterChain(size_t n) {
   }
   return first_cluster;
 }
-// #@@range_end(alloc_chain)
 
 FileDescriptor::FileDescriptor(DirectoryEntry& fat_entry)
     : fat_entry_{fat_entry} {
@@ -312,7 +280,6 @@ size_t FileDescriptor::Read(void* buf, size_t len) {
   return total;
 }
 
-// #@@range_begin(fat_fd_write)
 size_t FileDescriptor::Write(const void* buf, size_t len) {
   auto num_cluster = [](size_t bytes) {
     return (bytes + bytes_per_cluster - 1) / bytes_per_cluster;
@@ -354,6 +321,22 @@ size_t FileDescriptor::Write(const void* buf, size_t len) {
   fat_entry_.file_size = wr_off_;
   return total;
 }
-// #@@range_end(fat_fd_write)
+
+// #@@range_begin(fat_fd_load)
+size_t FileDescriptor::Load(void* buf, size_t len, size_t offset) {
+  FileDescriptor fd{fat_entry_};
+  fd.rd_off_ = offset;
+
+  unsigned long cluster = fat_entry_.FirstCluster();
+  while (offset >= bytes_per_cluster) {
+    offset -= bytes_per_cluster;
+    cluster = NextCluster(cluster);
+  }
+
+  fd.rd_cluster_ = cluster;
+  fd.rd_cluster_off_ = offset;
+  return fd.Read(buf, len);
+}
+// #@@range_end(fat_fd_load)
 
 } // namespace fat
