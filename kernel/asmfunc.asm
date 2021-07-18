@@ -71,6 +71,13 @@ SetDSAll:
     mov gs, di
     ret
 
+; #@@range_begin(get_cr2)
+global GetCR2  ; uint64_t GetCR2();
+GetCR2:
+    mov rax, cr2
+    ret
+; #@@range_end(get_cr2)
+
 global SetCR3  ; void SetCR3(uint64_t value);
 SetCR3:
     mov cr3, rdi
@@ -321,7 +328,6 @@ SyscallEntry:  ; void SyscallEntry(void);
     mov esi, edx
     jmp ExitApp
 
-; #@@range_begin(exit_app)
 global ExitApp  ; void ExitApp(uint64_t rsp, int32_t ret_val);
 ExitApp:
     mov rsp, rdi
@@ -335,4 +341,3 @@ ExitApp:
     pop rbx
 
     ret  ; CallApp の次の行に飛ぶ
-; #@@range_end(exit_app)
