@@ -116,36 +116,6 @@ Error CleanPageMap(
   return MAKE_ERROR(Error::kSuccess);
 }
 
-} // namespace
-
-WithError<PageMapEntry*> NewPageMap() {
-  auto frame = memory_manager->Allocate(1);
-  if (frame.error) {
-    return { nullptr, frame.error };
-  }
-
-  auto e = reinterpret_cast<PageMapEntry*>(frame.value.Frame());
-  memset(e, 0, sizeof(uint64_t) * 512);
-  return { e, MAKE_ERROR(Error::kSuccess) };
-}
-
-Error FreePageMap(PageMapEntry* table) {
-  const FrameID frame{reinterpret_cast<uintptr_t>(table) / kBytesPerFrame};
-  return memory_manager->Free(frame, 1);
-}
-
-Error SetupPageMaps(LinearAddress4Level addr, size_t num_4kpages) {
-  auto pml4_table = reinterpret_cast<PageMapEntry*>(GetCR3());
-  return SetupPageMap(pml4_table, 4, addr, num_4kpages).error;
-}
-
-// #@@range_begin(clean_page_maps)
-Error CleanPageMaps(LinearAddress4Level addr) {
-  auto pml4_table = reinterpret_cast<PageMapEntry*>(GetCR3());
-  return CleanPageMap(pml4_table, 4, addr);
-}
-// #@@range_end(clean_page_maps)
-
 // #@@range_begin(find_filemapping)
 const FileMapping* FindFileMapping(const std::vector<FileMapping>& fmaps,
                                    uint64_t causal_vaddr) {
@@ -174,6 +144,34 @@ Error PreparePageCache(FileDescriptor& fd, const FileMapping& m,
 }
 // #@@range_end(prepare_pagecache)
 
+} // namespace
+
+WithError<PageMapEntry*> NewPageMap() {
+  auto frame = memory_manager->Allocate(1);
+  if (frame.error) {
+    return { nullptr, frame.error };
+  }
+
+  auto e = reinterpret_cast<PageMapEntry*>(frame.value.Frame());
+  memset(e, 0, sizeof(uint64_t) * 512);
+  return { e, MAKE_ERROR(Error::kSuccess) };
+}
+
+Error FreePageMap(PageMapEntry* table) {
+  const FrameID frame{reinterpret_cast<uintptr_t>(table) / kBytesPerFrame};
+  return memory_manager->Free(frame, 1);
+}
+
+Error SetupPageMaps(LinearAddress4Level addr, size_t num_4kpages) {
+  auto pml4_table = reinterpret_cast<PageMapEntry*>(GetCR3());
+  return SetupPageMap(pml4_table, 4, addr, num_4kpages).error;
+}
+
+Error CleanPageMaps(LinearAddress4Level addr) {
+  auto pml4_table = reinterpret_cast<PageMapEntry*>(GetCR3());
+  return CleanPageMap(pml4_table, 4, addr);
+}
+
 // #@@range_begin(handle_pf)
 Error HandlePageFault(uint64_t error_code, uint64_t causal_addr) {
   auto& task = task_manager->CurrentTask();
@@ -189,4 +187,3 @@ Error HandlePageFault(uint64_t error_code, uint64_t causal_addr) {
   return MAKE_ERROR(Error::kIndexOutOfRange);
 }
 // #@@range_end(handle_pf)
-
