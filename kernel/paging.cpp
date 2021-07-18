@@ -146,6 +146,18 @@ Error CleanPageMaps(LinearAddress4Level addr) {
 }
 // #@@range_end(clean_page_maps)
 
+// #@@range_begin(find_filemapping)
+const FileMapping* FindFileMapping(const std::vector<FileMapping>& fmaps,
+                                   uint64_t causal_vaddr) {
+  for (const FileMapping& m : fmaps) {
+    if (m.vaddr_begin <= causal_vaddr && causal_vaddr < m.vaddr_end) {
+      return &m;
+    }
+  }
+  return nullptr;
+}
+// #@@range_end(find_filemapping)
+
 // #@@range_begin(handle_pf)
 Error HandlePageFault(uint64_t error_code, uint64_t causal_addr) {
   auto& task = task_manager->CurrentTask();
