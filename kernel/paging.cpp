@@ -152,9 +152,13 @@ Error HandlePageFault(uint64_t error_code, uint64_t causal_addr) {
   if (error_code & 1) { // P=1 かつページレベルの権限違反により例外が起きた
     return MAKE_ERROR(Error::kAlreadyAllocated);
   }
-  if (causal_addr < task.DPagingBegin() || task.DPagingEnd() <= causal_addr) {
-    return MAKE_ERROR(Error::kIndexOutOfRange);
+  if (task.DPagingBegin() <= causal_addr && causal_addr < task.DPagingEnd()) {
+    return SetupPageMaps(LinearAddress4Level{causal_addr}, 1);
   }
-  return SetupPageMaps(LinearAddress4Level{causal_addr}, 1);
+  if (auto m = FindFileMapping(task.FileMaps(), causal_addr)) {
+    return PreparePageCache(*task.Files()[m->fd], *m, causal_addr);
+  }
+  return MAKE_ERROR(Error::kIndexOutOfRange);
 }
 // #@@range_end(handle_pf)
+
