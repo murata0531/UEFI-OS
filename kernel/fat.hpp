@@ -142,7 +142,7 @@ bool NameIsEqual(const DirectoryEntry& entry, const char* name);
  * @param entry  ファイルを表すディレクトリエントリ
  * @return  読み込んだバイト数
  */
-size_t LoadFile(void* buf, size_t len, const DirectoryEntry& entry);
+size_t LoadFile(void* buf, size_t len, DirectoryEntry& entry);
 
 bool IsEndOfClusterchain(unsigned long cluster);
 
@@ -178,12 +178,20 @@ void SetFileName(DirectoryEntry& entry, const char* name);
  */
 WithError<DirectoryEntry*> CreateFile(const char* path);
 
-// #@@range_begin(fat_fd)
+/** @brief 指定した数の空きクラスタからなるチェーンを構築する。
+ *
+ * @param n  クラスタ数
+ * @return  構築したチェーンの先頭クラスタ番号
+ */
+unsigned long AllocateClusterChain(size_t n);
+
 class FileDescriptor : public ::FileDescriptor {
  public:
   explicit FileDescriptor(DirectoryEntry& fat_entry);
   size_t Read(void* buf, size_t len) override;
   size_t Write(const void* buf, size_t len) override;
+  size_t Size() const override { return fat_entry_.file_size; }
+  size_t Load(void* buf, size_t len, size_t offset) override;
 
  private:
   DirectoryEntry& fat_entry_;
@@ -194,7 +202,5 @@ class FileDescriptor : public ::FileDescriptor {
   unsigned long wr_cluster_ = 0;
   size_t wr_cluster_off_ = 0;
 };
-// #@@range_end(fat_fd)
-
 
 } // namespace fat
