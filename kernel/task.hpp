@@ -56,6 +56,9 @@ class Task {
   void SetDPagingBegin(uint64_t v);
   uint64_t DPagingEnd() const;
   void SetDPagingEnd(uint64_t v);
+  uint64_t FileMapEnd() const;
+  void SetFileMapEnd(uint64_t v);
+  std::vector<FileMapping>& FileMaps();
 
   int Level() const { return level_; }
   bool Running() const { return running_; }
@@ -69,7 +72,6 @@ class Task {
   unsigned int level_{kDefaultLevel};
   bool running_{false};
   std::vector<std::unique_ptr<::FileDescriptor>> files_{};
-  
   // #@@range_begin(filemap_fields)
   uint64_t dpaging_begin_{0}, dpaging_end_{0};
   uint64_t file_map_end_{0};
