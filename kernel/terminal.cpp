@@ -381,7 +381,7 @@ void Terminal::ExecuteLine() {
   }
 }
 
-Error Terminal::ExecuteFile(const fat::DirectoryEntry& file_entry, char* command, char* first_arg) {
+Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char* first_arg) {
   std::vector<uint8_t> file_buf(file_entry.file_size);
   fat::LoadFile(&file_buf[0], file_buf.size(), file_entry);
 
@@ -398,12 +398,10 @@ Error Terminal::ExecuteFile(const fat::DirectoryEntry& file_entry, char* command
     return pml4.error;
   }
 
-  // #@@range_begin(get_elf_last_addr)
   const auto [ elf_last_addr, elf_err ] = LoadELF(elf_header);
   if (elf_err) {
     return elf_err;
   }
-  // #@@range_end(get_elf_last_addr)
 
   LinearAddress4Level args_frame_addr{0xffff'ffff'ffff'f000};
   if (auto err = SetupPageMaps(args_frame_addr, 1)) {
@@ -428,19 +426,22 @@ Error Terminal::ExecuteFile(const fat::DirectoryEntry& file_entry, char* command
         std::make_unique<TerminalFileDescriptor>(task, *this));
   }
 
-  // #@@range_begin(set_dp_range)
   const uint64_t elf_next_page =
     (elf_last_addr + 4095) & 0xffff'ffff'ffff'f000;
   task.SetDPagingBegin(elf_next_page);
+  // #@@range_begin(set_filemap_end)
   task.SetDPagingEnd(elf_next_page);
+
+  task.SetFileMapEnd(0xffff'ffff'ffff'e000);
 
   auto entry_addr = elf_header->e_entry;
   int ret = CallApp(argc.value, argv, 3 << 3 | 3, entry_addr,
-  // #@@range_end(set_dp_range)
                     stack_frame_addr.value + 4096 - 8,
                     &task.OSStackPointer());
 
   task.Files().clear();
+  task.FileMaps().clear();
+  // #@@range_end(set_filemap_end)
 
   char s[64];
   sprintf(s, "app exited. ret = %d\n", ret);
@@ -647,4 +648,8 @@ size_t TerminalFileDescriptor::Read(void* buf, size_t len) {
 size_t TerminalFileDescriptor::Write(const void* buf, size_t len) {
   term_.Print(reinterpret_cast<const char*>(buf), len);
   return len;
+}
+
+size_t TerminalFileDescriptor::Load(void* buf, size_t len, size_t offset) {
+  return 0;
 }
