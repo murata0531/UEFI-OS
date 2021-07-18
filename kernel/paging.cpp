@@ -158,6 +158,22 @@ const FileMapping* FindFileMapping(const std::vector<FileMapping>& fmaps,
 }
 // #@@range_end(find_filemapping)
 
+// #@@range_begin(prepare_pagecache)
+Error PreparePageCache(FileDescriptor& fd, const FileMapping& m,
+                       uint64_t causal_vaddr) {
+  LinearAddress4Level page_vaddr{causal_vaddr};
+  page_vaddr.parts.offset = 0;
+  if (auto err = SetupPageMaps(page_vaddr, 1)) {
+    return err;
+  }
+
+  const long file_offset = page_vaddr.value - m.vaddr_begin;
+  void* page_cache = reinterpret_cast<void*>(page_vaddr.value);
+  fd.Load(page_cache, 4096, file_offset);
+  return MAKE_ERROR(Error::kSuccess);
+}
+// #@@range_end(prepare_pagecache)
+
 // #@@range_begin(handle_pf)
 Error HandlePageFault(uint64_t error_code, uint64_t causal_addr) {
   auto& task = task_manager->CurrentTask();
