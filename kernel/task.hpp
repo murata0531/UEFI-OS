@@ -30,6 +30,13 @@ using TaskFunc = void (uint64_t, int64_t);
 
 class TaskManager;
 
+// #@@range_begin(file_mapping)
+struct FileMapping {
+  int fd;
+  uint64_t vaddr_begin, vaddr_end;
+};
+// #@@range_end(file_mapping)
+
 class Task {
  public:
   static const int kDefaultLevel = 1;
