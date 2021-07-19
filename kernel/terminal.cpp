@@ -168,6 +168,48 @@ void ListAllEntries(Terminal* term, uint32_t dir_cluster) {
   }
 }
 
+// #@@range_begin(load_app)
+WithError<AppLoadInfo> LoadApp(fat::DirectoryEntry& file_entry, Task& task) {
+  PageMapEntry* temp_pml4;
+  if (auto [ pml4, err ] = SetupPML4(task); err) {
+    return { {}, err };
+  } else {
+    temp_pml4 = pml4;
+  }
+
+  if (auto it = app_loads->find(&file_entry); it != app_loads->end()) {
+    AppLoadInfo app_load = it->second;
+    auto err = CopyPageMaps(temp_pml4, app_load.pml4, 4, 256);
+    app_load.pml4 = temp_pml4;
+    return { app_load, err };
+  }
+
+  std::vector<uint8_t> file_buf(file_entry.file_size);
+  fat::LoadFile(&file_buf[0], file_buf.size(), file_entry);
+
+  auto elf_header = reinterpret_cast<Elf64_Ehdr*>(&file_buf[0]);
+  if (memcmp(elf_header->e_ident, "\x7f" "ELF", 4) != 0) {
+    return { {}, MAKE_ERROR(Error::kInvalidFile) };
+  }
+
+  auto [ last_addr, err_load ] = LoadELF(elf_header);
+  if (err_load) {
+    return { {}, err_load };
+  }
+
+  AppLoadInfo app_load{last_addr, elf_header->e_entry, temp_pml4};
+  app_loads->insert(std::make_pair(&file_entry, app_load));
+
+  if (auto [ pml4, err ] = SetupPML4(task); err) {
+    return { app_load, err };
+  } else {
+    app_load.pml4 = pml4;
+  }
+  auto err = CopyPageMaps(app_load.pml4, temp_pml4, 4, 256);
+  return { app_load, err };
+}
+// #@@range_end(load_app)
+
 } // namespace
 
 Terminal::Terminal(uint64_t task_id, bool show_window)
