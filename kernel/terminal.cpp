@@ -83,29 +83,6 @@ uintptr_t GetFirstLoadAddress(Elf64_Ehdr* ehdr) {
 
 static_assert(kBytesPerFrame >= 4096);
 
-WithError<uint64_t> CopyLoadSegments(Elf64_Ehdr* ehdr) {
-  auto phdr = GetProgramHeader(ehdr);
-  uint64_t last_addr = 0;
-  for (int i = 0; i < ehdr->e_phnum; ++i) {
-    if (phdr[i].p_type != PT_LOAD) continue;
-
-    LinearAddress4Level dest_addr;
-    dest_addr.value = phdr[i].p_vaddr;
-    last_addr = std::max(last_addr, phdr[i].p_vaddr + phdr[i].p_memsz);
-    const auto num_4kpages = (phdr[i].p_memsz + 4095) / 4096;
-
-    if (auto err = SetupPageMaps(dest_addr, num_4kpages)) {
-      return { last_addr, err };
-    }
-
-    const auto src = reinterpret_cast<uint8_t*>(ehdr) + phdr[i].p_offset;
-    const auto dst = reinterpret_cast<uint8_t*>(phdr[i].p_vaddr);
-    memcpy(dst, src, phdr[i].p_filesz);
-    memset(dst + phdr[i].p_filesz, 0, phdr[i].p_memsz - phdr[i].p_filesz);
-  }
-  return { last_addr, MAKE_ERROR(Error::kSuccess) };
-}
-
 // #@@range_begin(copy_load_segments)
 WithError<uint64_t> CopyLoadSegments(Elf64_Ehdr* ehdr) {
   auto phdr = GetProgramHeader(ehdr);
@@ -237,6 +214,10 @@ WithError<AppLoadInfo> LoadApp(fat::DirectoryEntry& file_entry, Task& task) {
 // #@@range_end(load_app)
 
 } // namespace
+
+// #@@range_begin(app_loads_map)
+std::map<fat::DirectoryEntry*, AppLoadInfo>* app_loads;
+// #@@range_end(app_loads_map)
 
 Terminal::Terminal(uint64_t task_id, bool show_window)
     : task_id_{task_id}, show_window_{show_window} {
@@ -430,7 +411,6 @@ void Terminal::ExecuteLine() {
     task_manager->NewTask()
       .InitContext(TaskTerminal, reinterpret_cast<int64_t>(first_arg))
       .Wakeup();
-  // #@@range_begin(memstat)
   } else if (strcmp(command, "memstat") == 0) {
     const auto p_stat = memory_manager->Stat();
 
@@ -444,7 +424,6 @@ void Terminal::ExecuteLine() {
         p_stat.total_frames * kBytesPerFrame / 1024 / 1024);
     Print(s);
   } else if (command[0] != 0) {
-  // #@@range_end(memstat)
     auto [ file_entry, post_slash ] = fat::FindFile(command);
     if (!file_entry) {
       Print("no such command: ");
