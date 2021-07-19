@@ -362,7 +362,21 @@ void Terminal::ExecuteLine() {
     task_manager->NewTask()
       .InitContext(TaskTerminal, reinterpret_cast<int64_t>(first_arg))
       .Wakeup();
+  // #@@range_begin(memstat)
+  } else if (strcmp(command, "memstat") == 0) {
+    const auto p_stat = memory_manager->Stat();
+
+    char s[64];
+    sprintf(s, "Phys used : %lu frames (%llu MiB)\n",
+        p_stat.allocated_frames,
+        p_stat.allocated_frames * kBytesPerFrame / 1024 / 1024);
+    Print(s);
+    sprintf(s, "Phys total: %lu frames (%llu MiB)\n",
+        p_stat.total_frames,
+        p_stat.total_frames * kBytesPerFrame / 1024 / 1024);
+    Print(s);
   } else if (command[0] != 0) {
+  // #@@range_end(memstat)
     auto [ file_entry, post_slash ] = fat::FindFile(command);
     if (!file_entry) {
       Print("no such command: ");
@@ -429,7 +443,6 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char
   const uint64_t elf_next_page =
     (elf_last_addr + 4095) & 0xffff'ffff'ffff'f000;
   task.SetDPagingBegin(elf_next_page);
-  // #@@range_begin(set_filemap_end)
   task.SetDPagingEnd(elf_next_page);
 
   task.SetFileMapEnd(0xffff'ffff'ffff'e000);
@@ -441,7 +454,6 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char
 
   task.Files().clear();
   task.FileMaps().clear();
-  // #@@range_end(set_filemap_end)
 
   char s[64];
   sprintf(s, "app exited. ret = %d\n", ret);
