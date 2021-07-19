@@ -106,6 +106,32 @@ WithError<uint64_t> CopyLoadSegments(Elf64_Ehdr* ehdr) {
   return { last_addr, MAKE_ERROR(Error::kSuccess) };
 }
 
+// #@@range_begin(copy_load_segments)
+WithError<uint64_t> CopyLoadSegments(Elf64_Ehdr* ehdr) {
+  auto phdr = GetProgramHeader(ehdr);
+  uint64_t last_addr = 0;
+  for (int i = 0; i < ehdr->e_phnum; ++i) {
+    if (phdr[i].p_type != PT_LOAD) continue;
+
+    LinearAddress4Level dest_addr;
+    dest_addr.value = phdr[i].p_vaddr;
+    last_addr = std::max(last_addr, phdr[i].p_vaddr + phdr[i].p_memsz);
+    const auto num_4kpages = (phdr[i].p_memsz + 4095) / 4096;
+
+    // setup pagemaps as readonly (writable = false)
+    if (auto err = SetupPageMaps(dest_addr, num_4kpages, false)) {
+      return { last_addr, err };
+    }
+
+    const auto src = reinterpret_cast<uint8_t*>(ehdr) + phdr[i].p_offset;
+    const auto dst = reinterpret_cast<uint8_t*>(phdr[i].p_vaddr);
+    memcpy(dst, src, phdr[i].p_filesz);
+    memset(dst + phdr[i].p_filesz, 0, phdr[i].p_memsz - phdr[i].p_filesz);
+  }
+  return { last_addr, MAKE_ERROR(Error::kSuccess) };
+}
+// #@@range_end(copy_load_segments)
+
 WithError<uint64_t> LoadELF(Elf64_Ehdr* ehdr) {
   if (ehdr->e_type != ET_EXEC) {
     return { 0, MAKE_ERROR(Error::kInvalidFormat) };
