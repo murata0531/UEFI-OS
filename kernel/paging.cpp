@@ -26,7 +26,10 @@ void SetupIdentityPageTable() {
     }
   }
 
+  // #@@range_begin(clear_wp)
   ResetCR3();
+  SetCR0(GetCR0() & 0xfffeffff); // Clear WP
+  // #@@range_end(clear_wp)
 }
 
 void InitializePaging() {
