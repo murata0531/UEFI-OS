@@ -14,6 +14,15 @@
 #include "layer.hpp"
 #include "fat.hpp"
 
+// #@@range_begin(app_load_info)
+struct AppLoadInfo {
+  uint64_t vaddr_end, entry;
+  PageMapEntry* pml4;
+};
+// #@@range_end(app_load_info)
+
+extern std::map<fat::DirectoryEntry*, AppLoadInfo>* app_loads;
+
 class Terminal {
  public:
   static const int kRows = 15, kColumns = 60;
