@@ -159,10 +159,17 @@ Error CleanPageMaps(LinearAddress4Level addr) {
 // #@@range_begin(handle_pf)
 Error HandlePageFault(uint64_t error_code, uint64_t causal_addr) {
   auto& task = task_manager->CurrentTask();
-  if (error_code & 1) { // P=1 かつページレベルの権限違反により例外が起きた
+  const bool present = (error_code >> 0) & 1;
+  const bool rw      = (error_code >> 1) & 1;
+  const bool user    = (error_code >> 2) & 1;
+  if (present && rw && user) {
+    return CopyOnePage(causal_addr);
+  } else if (present) {
     return MAKE_ERROR(Error::kAlreadyAllocated);
   }
+
   if (task.DPagingBegin() <= causal_addr && causal_addr < task.DPagingEnd()) {
+// #@@range_end(handle_pf)
     return SetupPageMaps(LinearAddress4Level{causal_addr}, 1);
   }
   if (auto m = FindFileMapping(task.FileMaps(), causal_addr)) {
@@ -170,4 +177,3 @@ Error HandlePageFault(uint64_t error_code, uint64_t causal_addr) {
   }
   return MAKE_ERROR(Error::kIndexOutOfRange);
 }
-// #@@range_end(handle_pf)
