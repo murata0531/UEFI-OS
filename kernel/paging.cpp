@@ -128,6 +128,19 @@ Error PreparePageCache(FileDescriptor& fd, const FileMapping& m,
 }
 // #@@range_end(prepare_pagecache)
 
+// #@@range_begin(copy_one_page)
+Error CopyOnePage(uint64_t causal_addr) {
+  auto [ p, err ] = NewPageMap();
+  if (err) {
+    return err;
+  }
+  const auto aligned_addr = causal_addr & 0xffff'ffff'ffff'f000;
+  memcpy(p, reinterpret_cast<const void*>(aligned_addr), 4096);
+  return SetPageContent(reinterpret_cast<PageMapEntry*>(GetCR3()), 4,
+                        LinearAddress4Level{causal_addr}, p);
+}
+// #@@range_end(copy_one_page)
+
 } // namespace
 
 WithError<PageMapEntry*> NewPageMap() {
