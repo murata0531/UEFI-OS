@@ -395,29 +395,19 @@ void Terminal::ExecuteLine() {
   }
 }
 
+// #@@range_begin(execute_file)
 Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char* first_arg) {
-  std::vector<uint8_t> file_buf(file_entry.file_size);
-  fat::LoadFile(&file_buf[0], file_buf.size(), file_entry);
-
-  auto elf_header = reinterpret_cast<Elf64_Ehdr*>(&file_buf[0]);
-  if (memcmp(elf_header->e_ident, "\x7f" "ELF", 4) != 0) {
-    return MAKE_ERROR(Error::kInvalidFile);
-  }
-
   __asm__("cli");
   auto& task = task_manager->CurrentTask();
   __asm__("sti");
 
-  if (auto pml4 = SetupPML4(task); pml4.error) {
-    return pml4.error;
-  }
-
-  const auto [ elf_last_addr, elf_err ] = LoadELF(elf_header);
-  if (elf_err) {
-    return elf_err;
+  auto [ app_load, err ] = LoadApp(file_entry, task);
+  if (err) {
+    return err;
   }
 
   LinearAddress4Level args_frame_addr{0xffff'ffff'ffff'f000};
+// #@@range_end(execute_file)
   if (auto err = SetupPageMaps(args_frame_addr, 1)) {
     return err;
   }
@@ -441,14 +431,13 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char
   }
 
   const uint64_t elf_next_page =
-    (elf_last_addr + 4095) & 0xffff'ffff'ffff'f000;
+    (app_load.vaddr_end + 4095) & 0xffff'ffff'ffff'f000;
   task.SetDPagingBegin(elf_next_page);
   task.SetDPagingEnd(elf_next_page);
 
   task.SetFileMapEnd(0xffff'ffff'ffff'e000);
 
-  auto entry_addr = elf_header->e_entry;
-  int ret = CallApp(argc.value, argv, 3 << 3 | 3, entry_addr,
+  int ret = CallApp(argc.value, argv, 3 << 3 | 3, app_load.entry,
                     stack_frame_addr.value + 4096 - 8,
                     &task.OSStackPointer());
 
@@ -459,8 +448,7 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char
   sprintf(s, "app exited. ret = %d\n", ret);
   Print(s);
 
-  const auto addr_first = GetFirstLoadAddress(elf_header);
-  if (auto err = CleanPageMaps(LinearAddress4Level{addr_first})) {
+  if (auto err = CleanPageMaps(LinearAddress4Level{0xffff'8000'0000'0000})) {
     return err;
   }
   return FreePML4(task);
