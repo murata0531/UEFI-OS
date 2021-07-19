@@ -128,6 +128,22 @@ Error PreparePageCache(FileDescriptor& fd, const FileMapping& m,
 }
 // #@@range_end(prepare_pagecache)
 
+// #@@range_begin(set_page_content)
+Error SetPageContent(PageMapEntry* table, int part,
+                     LinearAddress4Level addr, PageMapEntry* content) {
+  if (part == 1) {
+    const auto i = addr.Part(part);
+    table[i].SetPointer(content);
+    table[i].bits.writable = 1;
+    InvalidateTLB(addr.value);
+    return MAKE_ERROR(Error::kSuccess);
+  }
+
+  const auto i = addr.Part(part);
+  return SetPageContent(table[i].Pointer(), part - 1, addr, content);
+}
+// #@@range_end(set_page_content)
+
 // #@@range_begin(copy_one_page)
 Error CopyOnePage(uint64_t causal_addr) {
   auto [ p, err ] = NewPageMap();
