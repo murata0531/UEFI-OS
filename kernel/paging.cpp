@@ -58,8 +58,10 @@ WithError<PageMapEntry*> SetNewPageMapIfNotPresent(PageMapEntry& entry) {
   return { child_map, MAKE_ERROR(Error::kSuccess) };
 }
 
+// #@@range_begin(setup_pagemap)
 WithError<size_t> SetupPageMap(
-    PageMapEntry* page_map, int page_map_level, LinearAddress4Level addr, size_t num_4kpages) {
+    PageMapEntry* page_map, int page_map_level, LinearAddress4Level addr,
+    size_t num_4kpages, bool writable) {
   while (num_4kpages > 0) {
     const auto entry_index = addr.Part(page_map_level);
 
@@ -67,14 +69,16 @@ WithError<size_t> SetupPageMap(
     if (err) {
       return { num_4kpages, err };
     }
-    page_map[entry_index].bits.writable = 1;
     page_map[entry_index].bits.user = 1;
 
     if (page_map_level == 1) {
+      page_map[entry_index].bits.writable = writable;
       --num_4kpages;
     } else {
+      page_map[entry_index].bits.writable = true;
       auto [ num_remain_pages, err ] =
-        SetupPageMap(child_map, page_map_level - 1, addr, num_4kpages);
+        SetupPageMap(child_map, page_map_level - 1, addr, num_4kpages, writable);
+// #@@range_end(setup_pagemap)
       if (err) {
         return { num_4kpages, err };
       }
@@ -94,30 +98,7 @@ WithError<size_t> SetupPageMap(
   return { num_4kpages, MAKE_ERROR(Error::kSuccess) };
 }
 
-Error CleanPageMap(
-    PageMapEntry* page_map, int page_map_level, LinearAddress4Level addr) {
-  for (int i = addr.Part(page_map_level); i < 512; ++i) {
-    auto entry = page_map[i];
-    if (!entry.bits.present) {
-      continue;
-    }
-
-    if (page_map_level > 1) {
-      if (auto err = CleanPageMap(entry.Pointer(), page_map_level - 1, addr)) {
-        return err;
-      }
-    }
-
-    const auto entry_addr = reinterpret_cast<uintptr_t>(entry.Pointer());
-    const FrameID map_frame{entry_addr / kBytesPerFrame};
-    if (auto err = memory_manager->Free(map_frame, 1)) {
-      return err;
-    }
-    page_map[i].data = 0;
-  }
-
-  return MAKE_ERROR(Error::kSuccess);
-}
+// #@@range_begin(clean_page_map)
 
 // #@@range_begin(find_filemapping)
 const FileMapping* FindFileMapping(const std::vector<FileMapping>& fmaps,
