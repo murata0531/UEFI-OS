@@ -112,6 +112,47 @@ const FileMapping* FindFileMapping(const std::vector<FileMapping>& fmaps,
 }
 // #@@range_end(find_filemapping)
 
+// #@@range_begin(clean_page_map)
+Error CleanPageMap(
+    PageMapEntry* page_map, int page_map_level, LinearAddress4Level addr) {
+  for (int i = addr.Part(page_map_level); i < 512; ++i) {
+    auto entry = page_map[i];
+// #@@range_end(clean_page_map)
+    if (!entry.bits.present) {
+      continue;
+    }
+
+    if (page_map_level > 1) {
+      if (auto err = CleanPageMap(entry.Pointer(), page_map_level - 1, addr)) {
+        return err;
+      }
+    }
+
+// #@@range_begin(clean_page_map_free)
+    if (entry.bits.writable) {
+      const auto entry_addr = reinterpret_cast<uintptr_t>(entry.Pointer());
+      const FrameID map_frame{entry_addr / kBytesPerFrame};
+      if (auto err = memory_manager->Free(map_frame, 1)) {
+        return err;
+      }
+    }
+    page_map[i].data = 0;
+// #@@range_end(clean_page_map_free)
+  }
+
+  return MAKE_ERROR(Error::kSuccess);
+}
+
+const FileMapping* FindFileMapping(const std::vector<FileMapping>& fmaps,
+                                   uint64_t causal_vaddr) {
+  for (const FileMapping& m : fmaps) {
+    if (m.vaddr_begin <= causal_vaddr && causal_vaddr < m.vaddr_end) {
+      return &m;
+    }
+  }
+  return nullptr;
+}
+
 // #@@range_begin(prepare_pagecache)
 Error PreparePageCache(FileDescriptor& fd, const FileMapping& m,
                        uint64_t causal_vaddr) {
