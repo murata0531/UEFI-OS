@@ -105,6 +105,20 @@ bool IsHankaku(char32_t c) {
 }
 // #@@range_end(is_hankaku)
 
+// #@@range_begin(new_ftface)
+WithError<FT_Face> NewFTFace() {
+  FT_Face face;
+  if (int err = FT_New_Memory_Face(
+        ft_library, nihongo_buf->data(), nihongo_buf->size(), 0, &face)) {
+    return { face, MAKE_ERROR(Error::kFreeTypeError) };
+  }
+  if (int err = FT_Set_Pixel_Sizes(face, 16, 16)) {
+    return { face, MAKE_ERROR(Error::kFreeTypeError) };
+  }
+  return { face, MAKE_ERROR(Error::kSuccess) };
+}
+// #@@range_end(new_ftface)
+
 // #@@range_begin(write_unicode)
 void WriteUnicode(PixelWriter& writer, Vector2D<int> pos,
                   char32_t c, const PixelColor& color) {
