@@ -526,23 +526,22 @@ void Terminal::Print(char c) {
   }
 }
 
+// #@@range_begin(print_str)
 void Terminal::Print(const char* s, std::optional<size_t> len) {
   const auto cursor_before = CalcCursorPos();
   DrawCursor(false);
 
-  if (len) {
-    for (size_t i = 0; i < *len; ++i) {
-      Print(*s);
-      ++s;
-    }
-  } else {
-    while (*s) {
-      Print(*s);
-      ++s;
-    }
+  size_t i = 0;
+  const size_t len_ = len ? *len : std::numeric_limits<size_t>::max();
+
+  while (s[i] && i < len_) {
+    const auto [ u32, bytes ] = ConvertUTF8To32(&s[i]);
+    Print(u32);
+    i += bytes;
   }
 
   DrawCursor(true);
+// #@@range_end(print_str)
   const auto cursor_after = CalcCursorPos();
 
   Vector2D<int> draw_pos{ToplevelWindow::kTopLeftMargin.x, cursor_before.y};
