@@ -83,7 +83,6 @@ uintptr_t GetFirstLoadAddress(Elf64_Ehdr* ehdr) {
 
 static_assert(kBytesPerFrame >= 4096);
 
-// #@@range_begin(copy_load_segments)
 WithError<uint64_t> CopyLoadSegments(Elf64_Ehdr* ehdr) {
   auto phdr = GetProgramHeader(ehdr);
   uint64_t last_addr = 0;
@@ -107,7 +106,6 @@ WithError<uint64_t> CopyLoadSegments(Elf64_Ehdr* ehdr) {
   }
   return { last_addr, MAKE_ERROR(Error::kSuccess) };
 }
-// #@@range_end(copy_load_segments)
 
 WithError<uint64_t> LoadELF(Elf64_Ehdr* ehdr) {
   if (ehdr->e_type != ET_EXEC) {
@@ -171,7 +169,6 @@ void ListAllEntries(Terminal* term, uint32_t dir_cluster) {
   }
 }
 
-// #@@range_begin(load_app)
 WithError<AppLoadInfo> LoadApp(fat::DirectoryEntry& file_entry, Task& task) {
   PageMapEntry* temp_pml4;
   if (auto [ pml4, err ] = SetupPML4(task); err) {
@@ -211,13 +208,10 @@ WithError<AppLoadInfo> LoadApp(fat::DirectoryEntry& file_entry, Task& task) {
   auto err = CopyPageMaps(app_load.pml4, temp_pml4, 4, 256);
   return { app_load, err };
 }
-// #@@range_end(load_app)
 
 } // namespace
 
-// #@@range_begin(app_loads_map)
 std::map<fat::DirectoryEntry*, AppLoadInfo>* app_loads;
-// #@@range_end(app_loads_map)
 
 Terminal::Terminal(uint64_t task_id, bool show_window)
     : task_id_{task_id}, show_window_{show_window} {
@@ -389,6 +383,7 @@ void Terminal::ExecuteLine() {
       fat::FormatName(*file_entry, name);
       Print(name);
       Print(" is not a directory\n");
+    // #@@range_begin(cat_print)
     } else {
       fat::FileDescriptor fd{*file_entry};
       char u8buf[4];
@@ -408,6 +403,7 @@ void Terminal::ExecuteLine() {
       }
       DrawCursor(true);
     }
+    // #@@range_end(cat_print)
   } else if (strcmp(command, "noterm") == 0) {
     task_manager->NewTask()
       .InitContext(TaskTerminal, reinterpret_cast<int64_t>(first_arg))
@@ -443,7 +439,6 @@ void Terminal::ExecuteLine() {
   }
 }
 
-// #@@range_begin(execute_file)
 Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char* first_arg) {
   __asm__("cli");
   auto& task = task_manager->CurrentTask();
@@ -455,7 +450,6 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char
   }
 
   LinearAddress4Level args_frame_addr{0xffff'ffff'ffff'f000};
-// #@@range_end(execute_file)
   if (auto err = SetupPageMaps(args_frame_addr, 1)) {
     return err;
   }
@@ -468,10 +462,13 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char
     return argc.error;
   }
 
-  LinearAddress4Level stack_frame_addr{0xffff'ffff'ffff'e000};
-  if (auto err = SetupPageMaps(stack_frame_addr, 1)) {
+  // #@@range_begin(app_stack_size)
+  const int stack_size = 8 * 4096;
+  LinearAddress4Level stack_frame_addr{0xffff'ffff'ffff'f000 - stack_size};
+  if (auto err = SetupPageMaps(stack_frame_addr, stack_size / 4096)) {
     return err;
   }
+  // #@@range_end(app_stack_size)
 
   for (int i = 0; i < 3; ++i) {
     task.Files().push_back(
@@ -483,11 +480,13 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char
   task.SetDPagingBegin(elf_next_page);
   task.SetDPagingEnd(elf_next_page);
 
-  task.SetFileMapEnd(0xffff'ffff'ffff'e000);
+  // #@@range_begin(use_stack_size)
+  task.SetFileMapEnd(stack_frame_addr.value);
 
   int ret = CallApp(argc.value, argv, 3 << 3 | 3, app_load.entry,
-                    stack_frame_addr.value + 4096 - 8,
+                    stack_frame_addr.value + stack_size - 8,
                     &task.OSStackPointer());
+  // #@@range_end(use_stack_size)
 
   task.Files().clear();
   task.FileMaps().clear();
