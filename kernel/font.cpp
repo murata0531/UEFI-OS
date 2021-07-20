@@ -44,6 +44,41 @@ void WriteString(PixelWriter& writer, Vector2D<int> pos, const char* s, const Pi
 }
 // #@@range_end(write_string)
 
+// #@@range_begin(conv_utf8to32)
+std::pair<char32_t, int> ConvertUTF8To32(const char* u8) {
+  switch (CountUTF8Size(u8[0])) {
+  case 1:
+    return {
+      static_cast<char32_t>(u8[0]),
+      1
+    };
+  case 2:
+    return {
+      (static_cast<char32_t>(u8[0]) & 0b0001'1111) << 6 |
+      (static_cast<char32_t>(u8[1]) & 0b0011'1111) << 0,
+      2
+    };
+  case 3:
+    return {
+      (static_cast<char32_t>(u8[0]) & 0b0000'1111) << 12 |
+      (static_cast<char32_t>(u8[1]) & 0b0011'1111) << 6 |
+      (static_cast<char32_t>(u8[2]) & 0b0011'1111) << 0,
+      3
+    };
+  case 4:
+    return {
+      (static_cast<char32_t>(u8[0]) & 0b0000'0111) << 18 |
+      (static_cast<char32_t>(u8[1]) & 0b0011'1111) << 12 |
+      (static_cast<char32_t>(u8[2]) & 0b0011'1111) << 6 |
+      (static_cast<char32_t>(u8[3]) & 0b0011'1111) << 0,
+      4
+    };
+  default:
+    return { 0, 0 };
+  }
+}
+// #@@range_end(conv_utf8to32)
+
 // #@@range_begin(write_unicode)
 void WriteUnicode(PixelWriter& writer, Vector2D<int> pos,
                   char32_t c, const PixelColor& color) {
