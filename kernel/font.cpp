@@ -32,11 +32,17 @@ void WriteAscii(PixelWriter& writer, Vector2D<int> pos, char c, const PixelColor
   }
 }
 
+// #@@range_begin(write_string)
 void WriteString(PixelWriter& writer, Vector2D<int> pos, const char* s, const PixelColor& color) {
-  for (int i = 0; s[i] != '\0'; ++i) {
-    WriteAscii(writer, pos + Vector2D<int>{8 * i, 0}, s[i], color);
+  int x = 0;
+  while (*s) {
+    const auto [ u32, bytes ] = ConvertUTF8To32(s);
+    WriteUnicode(writer, pos + Vector2D<int>{8 * x, 0}, u32, color);
+    s += bytes;
+    x += IsHankaku(u32) ? 1 : 2;
   }
 }
+// #@@range_end(write_string)
 
 // #@@range_begin(write_unicode)
 void WriteUnicode(PixelWriter& writer, Vector2D<int> pos,
