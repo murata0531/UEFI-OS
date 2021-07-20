@@ -23,6 +23,21 @@ FT_Library ft_library;
 std::vector<uint8_t>* nihongo_buf;
 // #@@range_end(global_var)
 
+// #@@range_begin(render_unicode)
+Error RenderUnicode(char32_t c, FT_Face face) {
+  const auto glyph_index = FT_Get_Char_Index(face, c);
+  if (glyph_index == 0) {
+    return MAKE_ERROR(Error::kFreeTypeError);
+  }
+
+  if (int err = FT_Load_Glyph(face, glyph_index,
+                              FT_LOAD_RENDER | FT_LOAD_TARGET_MONO)) {
+    return MAKE_ERROR(Error::kFreeTypeError);
+  }
+  return MAKE_ERROR(Error::kSuccess);
+}
+// #@@range_end(render_unicode)
+
 void WriteAscii(PixelWriter& writer, Vector2D<int> pos, char c, const PixelColor& color) {
   const uint8_t* font = GetFont(c);
   if (font == nullptr) {
