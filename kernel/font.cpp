@@ -112,3 +112,23 @@ void WriteUnicode(PixelWriter& writer, Vector2D<int> pos,
   WriteAscii(writer, pos + Vector2D<int>{8, 0}, '?', color);
 }
 // #@@range_end(write_unicode)
+
+// #@@range_begin(init_font)
+void InitializeFont() {
+  if (int err = FT_Init_FreeType(&ft_library)) {
+    exit(1);
+  }
+
+  auto [ entry, pos_slash ] = fat::FindFile("/nihongo.ttf");
+  if (entry == nullptr || pos_slash) {
+    exit(1);
+  }
+
+  const size_t size = entry->file_size;
+  nihongo_buf = new std::vector<uint8_t>(size);
+  if (LoadFile(nihongo_buf->data(), size, *entry) != size) {
+    delete nihongo_buf;
+    exit(1);
+  }
+}
+// #@@range_end(init_font)
