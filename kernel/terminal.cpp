@@ -502,7 +502,12 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char
   return FreePML4(task);
 }
 
-void Terminal::Print(char c) {
+// #@@range_begin(print_char)
+void Terminal::Print(char32_t c) {
+  if (!show_window_) {
+    return;
+  }
+
   auto newline = [this]() {
     cursor_.x = 0;
     if (cursor_.y < kRows - 1) {
@@ -512,19 +517,23 @@ void Terminal::Print(char c) {
     }
   };
 
-  if (c == '\n') {
+  if (c == U'\n') {
     newline();
-  } else {
-    if (show_window_) {
-      WriteAscii(*window_->Writer(), CalcCursorPos(), c, {255, 255, 255});
-    }
-    if (cursor_.x == kColumns - 1) {
+  } else if (IsHankaku(c)) {
+    if (cursor_.x == kColumns) {
       newline();
-    } else {
-      ++cursor_.x;
     }
+    WriteUnicode(*window_->Writer(), CalcCursorPos(), c, {255, 255, 255});
+    ++cursor_.x;
+  } else {
+    if (cursor_.x >= kColumns - 1) {
+      newline();
+    }
+    WriteUnicode(*window_->Writer(), CalcCursorPos(), c, {255, 255, 255});
+    cursor_.x += 2;
   }
 }
+// #@@range_end(print_char)
 
 // #@@range_begin(print_str)
 void Terminal::Print(const char* s, std::optional<size_t> len) {
