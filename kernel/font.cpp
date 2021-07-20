@@ -44,6 +44,21 @@ void WriteString(PixelWriter& writer, Vector2D<int> pos, const char* s, const Pi
 }
 // #@@range_end(write_string)
 
+// #@@range_begin(count_utf8size)
+int CountUTF8Size(uint8_t c) {
+  if (c < 0x80) {
+    return 1;
+  } else if (0xc0 <= c && c < 0xe0) {
+    return 2;
+  } else if (0xe0 <= c && c < 0xf0) {
+    return 3;
+  } else if (0xf0 <= c && c < 0xf8) {
+    return 4;
+  }
+  return 0;
+}
+// #@@range_end(count_utf8size)
+
 // #@@range_begin(conv_utf8to32)
 std::pair<char32_t, int> ConvertUTF8To32(const char* u8) {
   switch (CountUTF8Size(u8[0])) {
@@ -79,6 +94,12 @@ std::pair<char32_t, int> ConvertUTF8To32(const char* u8) {
 }
 // #@@range_end(conv_utf8to32)
 
+// #@@range_begin(is_hankaku)
+bool IsHankaku(char32_t c) {
+  return c <= 0x7f;
+}
+// #@@range_end(is_hankaku)
+
 // #@@range_begin(write_unicode)
 void WriteUnicode(PixelWriter& writer, Vector2D<int> pos,
                   char32_t c, const PixelColor& color) {
@@ -91,18 +112,3 @@ void WriteUnicode(PixelWriter& writer, Vector2D<int> pos,
   WriteAscii(writer, pos + Vector2D<int>{8, 0}, '?', color);
 }
 // #@@range_end(write_unicode)
-
-// #@@range_begin(count_utf8size)
-int CountUTF8Size(uint8_t c) {
-  if (c < 0x80) {
-    return 1;
-  } else if (0xc0 <= c && c < 0xe0) {
-    return 2;
-  } else if (0xe0 <= c && c < 0xf0) {
-    return 3;
-  } else if (0xf0 <= c && c < 0xf8) {
-    return 4;
-  }
-  return 0;
-}
-// #@@range_end(count_utf8size)
