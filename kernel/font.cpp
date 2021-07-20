@@ -56,3 +56,18 @@ void WriteUnicode(PixelWriter& writer, Vector2D<int> pos,
   WriteAscii(writer, pos + Vector2D<int>{8, 0}, '?', color);
 }
 // #@@range_end(write_unicode)
+
+// #@@range_begin(count_utf8size)
+int CountUTF8Size(uint8_t c) {
+  if (c < 0x80) {
+    return 1;
+  } else if (0xc0 <= c && c < 0xe0) {
+    return 2;
+  } else if (0xe0 <= c && c < 0xf0) {
+    return 3;
+  } else if (0xf0 <= c && c < 0xf8) {
+    return 4;
+  }
+  return 0;
+}
+// #@@range_end(count_utf8size)
