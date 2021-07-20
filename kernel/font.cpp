@@ -37,3 +37,16 @@ void WriteString(PixelWriter& writer, Vector2D<int> pos, const char* s, const Pi
     WriteAscii(writer, pos + Vector2D<int>{8 * i, 0}, s[i], color);
   }
 }
+
+// #@@range_begin(write_unicode)
+void WriteUnicode(PixelWriter& writer, Vector2D<int> pos,
+                  char32_t c, const PixelColor& color) {
+  if (c <= 0x7f) {
+    WriteAscii(writer, pos, c, color);
+    return;
+  }
+
+  WriteAscii(writer, pos, '?', color);
+  WriteAscii(writer, pos + Vector2D<int>{8, 0}, '?', color);
+}
+// #@@range_end(write_unicode)
