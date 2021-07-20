@@ -18,6 +18,11 @@ const uint8_t* GetFont(char c) {
   return &_binary_hankaku_bin_start + index;
 }
 
+// #@@range_begin(global_var)
+FT_Library ft_library;
+std::vector<uint8_t>* nihongo_buf;
+// #@@range_end(global_var)
+
 void WriteAscii(PixelWriter& writer, Vector2D<int> pos, char c, const PixelColor& color) {
   const uint8_t* font = GetFont(c);
   if (font == nullptr) {
