@@ -128,7 +128,7 @@ extern "C" void KernelMainNewStack(
   InitializeGraphics(frame_buffer_config_ref);
   InitializeConsole();
 
-  printk("Welcome\n");
+  printk("Welcome!\n");
   SetLogLevel(kWarn);
 
   InitializeSegmentation();
@@ -138,6 +138,7 @@ extern "C" void KernelMainNewStack(
   InitializeInterrupt();
 
   fat::Initialize(volume_image);
+  InitializeFont();
   InitializePCI();
 
   InitializeLayer();
