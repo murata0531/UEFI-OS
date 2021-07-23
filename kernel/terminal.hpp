@@ -56,6 +56,7 @@ class Terminal {
   Rectangle<int> HistoryUpDown(int direction);
 
   bool show_window_;
+  std::array<std::shared_ptr<FileDescriptor>, 3> files_;
 };
 
 void TaskTerminal(uint64_t task_id, int64_t data);
