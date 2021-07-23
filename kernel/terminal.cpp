@@ -213,8 +213,11 @@ WithError<AppLoadInfo> LoadApp(fat::DirectoryEntry& file_entry, Task& task) {
 
 std::map<fat::DirectoryEntry*, AppLoadInfo>* app_loads;
 
-Terminal::Terminal(uint64_t task_id, bool show_window)
-    : task_id_{task_id}, show_window_{show_window} {
+Terminal::Terminal(Task& task, bool show_window)
+    : task_{task}, show_window_{show_window} {
+  for (int i = 0; i < files_.size(); ++i) {
+    files_[i] = std::make_shared<TerminalFileDescriptor>(*this);
+  }
   if (show_window) {
     window_ = std::make_shared<ToplevelWindow>(
         kColumns * 8 + 8 + ToplevelWindow::kMarginX,
