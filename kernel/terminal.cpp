@@ -322,74 +322,95 @@ void Terminal::Scroll1() {
                 {4, 4 + 16*cursor_.y}, {8*kColumns, 16}, {0, 0, 0});
 }
 
+// #@@range_begin(execute_line)
 void Terminal::ExecuteLine() {
   char* command = &linebuf_[0];
   char* first_arg = strchr(&linebuf_[0], ' ');
+  char* redir_char = strchr(&linebuf_[0], '>');
   if (first_arg) {
     *first_arg = 0;
     ++first_arg;
   }
 
-  if (strcmp(command, "echo") == 0) {
-    if (first_arg) {
-      Print(first_arg);
+  auto original_stdout = files_[1];
+
+  if (redir_char) {
+    *redir_char = 0;
+    char* redir_dest = &redir_char[1];
+    while (isspace(*redir_dest)) {
+      ++redir_dest;
     }
-    Print("\n");
+
+    auto [ file, post_slash ] = fat::FindFile(redir_dest);
+    if (file == nullptr) {
+      auto [ new_file, err ] = fat::CreateFile(redir_dest);
+      if (err) {
+        PrintToFD(*files_[2],
+                  "failed to create a redirect file: %s\n", err.Name());
+        return;
+      }
+      file = new_file;
+    } else if (file->attr == fat::Attribute::kDirectory || post_slash) {
+      PrintToFD(*files_[2], "cannot redirect to a directory\n");
+      return;
+    }
+    files_[1] = std::make_shared<fat::FileDescriptor>(*file);
+  }
+
+// #@@range_begin(echo_command)
+  if (strcmp(command, "echo") == 0) {
+// #@@range_end(execute_line)
+    if (first_arg) {
+      PrintToFD(*files_[1], "%s", first_arg);
+    }
+    PrintToFD(*files_[1], "\n");
   } else if (strcmp(command, "clear") == 0) {
+// #@@range_end(echo_command)
     if (show_window_) {
       FillRectangle(*window_->InnerWriter(),
                     {4, 4}, {8*kColumns, 16*kRows}, {0, 0, 0});
     }
     cursor_.y = 0;
   } else if (strcmp(command, "lspci") == 0) {
-    char s[64];
     for (int i = 0; i < pci::num_device; ++i) {
       const auto& dev = pci::devices[i];
       auto vendor_id = pci::ReadVendorId(dev.bus, dev.device, dev.function);
-      sprintf(s, "%02x:%02x.%d vend=%04x head=%02x class=%02x.%02x.%02x\n",
+      PrintToFD(*files_[1],
+          "%02x:%02x.%d vend=%04x head=%02x class=%02x.%02x.%02x\n",
           dev.bus, dev.device, dev.function, vendor_id, dev.header_type,
           dev.class_code.base, dev.class_code.sub, dev.class_code.interface);
-      Print(s);
     }
   } else if (strcmp(command, "ls") == 0) {
     if (!first_arg || first_arg[0] == '\0') {
-      ListAllEntries(this, fat::boot_volume_image->root_cluster);
+      ListAllEntries(*files_[1], fat::boot_volume_image->root_cluster);
     } else {
       auto [ dir, post_slash ] = fat::FindFile(first_arg);
       if (dir == nullptr) {
-        Print("No such file or directory: ");
-        Print(first_arg);
-        Print("\n");
+        PrintToFD(*files_[2], "No such file or directory: %s\n", first_arg);
       } else if (dir->attr == fat::Attribute::kDirectory) {
-        ListAllEntries(this, dir->FirstCluster());
+        ListAllEntries(*files_[1], dir->FirstCluster());
       } else {
         char name[13];
         fat::FormatName(*dir, name);
         if (post_slash) {
-          Print(name);
-          Print(" is not a directory\n");
+          PrintToFD(*files_[2], "%s is not a directory\n", name);
         } else {
-          Print(name);
-          Print("\n");
+          PrintToFD(*files_[1], "%s\n", name);
         }
       }
     }
+// #@@range_begin(cat_command)
   } else if (strcmp(command, "cat") == 0) {
-    char s[64];
-
     auto [ file_entry, post_slash ] = fat::FindFile(first_arg);
     if (!file_entry) {
-      sprintf(s, "no such file: %s\n", first_arg);
-      Print(s);
+      PrintToFD(*files_[2], "no such file: %s\n", first_arg);
     } else if (file_entry->attr != fat::Attribute::kDirectory && post_slash) {
       char name[13];
       fat::FormatName(*file_entry, name);
-      Print(name);
-      Print(" is not a directory\n");
-    // #@@range_begin(cat_print)
+      PrintToFD(*files_[2], "%s is not a directory\n", name);
     } else {
       fat::FileDescriptor fd{*file_entry};
-      char u8buf[4];
+      char u8buf[5];
 
       DrawCursor(false);
       while (true) {
@@ -400,47 +421,42 @@ void Terminal::ExecuteLine() {
         if (u8_remain > 0 && fd.Read(&u8buf[1], u8_remain) != u8_remain) {
           break;
         }
+        u8buf[u8_remain + 1] = 0;
 
-        const auto [ u32, u8_next ] = ConvertUTF8To32(u8buf);
-        Print(u32 ? u32 : U'□');
+        PrintToFD(*files_[1], "%s", u8buf);
       }
       DrawCursor(true);
     }
-    // #@@range_end(cat_print)
   } else if (strcmp(command, "noterm") == 0) {
+// #@@range_end(cat_command)
     task_manager->NewTask()
       .InitContext(TaskTerminal, reinterpret_cast<int64_t>(first_arg))
       .Wakeup();
   } else if (strcmp(command, "memstat") == 0) {
     const auto p_stat = memory_manager->Stat();
-
-    char s[64];
-    sprintf(s, "Phys used : %lu frames (%llu MiB)\n",
+    PrintToFD(*files_[1], "Phys used : %lu frames (%llu MiB)\n",
         p_stat.allocated_frames,
         p_stat.allocated_frames * kBytesPerFrame / 1024 / 1024);
-    Print(s);
-    sprintf(s, "Phys total: %lu frames (%llu MiB)\n",
+    PrintToFD(*files_[1], "Phys total: %lu frames (%llu MiB)\n",
         p_stat.total_frames,
         p_stat.total_frames * kBytesPerFrame / 1024 / 1024);
-    Print(s);
   } else if (command[0] != 0) {
     auto [ file_entry, post_slash ] = fat::FindFile(command);
     if (!file_entry) {
-      Print("no such command: ");
-      Print(command);
-      Print("\n");
+      PrintToFD(*files_[2], "no such command: %s\n", command);
     } else if (file_entry->attr != fat::Attribute::kDirectory && post_slash) {
       char name[13];
       fat::FormatName(*file_entry, name);
-      Print(name);
-      Print(" is not a directory\n");
+      PrintToFD(*files_[2], "%s is not a directory\n", name);
     } else if (auto err = ExecuteFile(*file_entry, command, first_arg)) {
-      Print("failed to exec file: ");
-      Print(err.Name());
-      Print("\n");
+      PrintToFD(*files_[2], "failed to exec file: %s\n", err.Name());
     }
   }
+
+// #@@range_begin(execute_line_finish)
+  files_[1] = original_stdout;
 }
+// #@@range_end(execute_line_finish)
 
 Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
                             char* command, char* first_arg) {
