@@ -442,7 +442,8 @@ void Terminal::ExecuteLine() {
   }
 }
 
-Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char* first_arg) {
+Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
+                            char* command, char* first_arg) {
   __asm__("cli");
   auto& task = task_manager->CurrentTask();
   __asm__("sti");
@@ -465,31 +466,28 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry, char* command, char
     return argc.error;
   }
 
-  // #@@range_begin(app_stack_size)
   const int stack_size = 8 * 4096;
   LinearAddress4Level stack_frame_addr{0xffff'ffff'ffff'f000 - stack_size};
   if (auto err = SetupPageMaps(stack_frame_addr, stack_size / 4096)) {
     return err;
   }
-  // #@@range_end(app_stack_size)
 
-  for (int i = 0; i < 3; ++i) {
-    task.Files().push_back(
-        std::make_unique<TerminalFileDescriptor>(task, *this));
+  // #@@range_begin(setup_app_files)
+  for (int i = 0; i < files_.size(); ++i) {
+    task.Files().push_back(files_[i]);
   }
+  // #@@range_end(setup_app_files)
 
   const uint64_t elf_next_page =
     (app_load.vaddr_end + 4095) & 0xffff'ffff'ffff'f000;
   task.SetDPagingBegin(elf_next_page);
   task.SetDPagingEnd(elf_next_page);
 
-  // #@@range_begin(use_stack_size)
   task.SetFileMapEnd(stack_frame_addr.value);
 
   int ret = CallApp(argc.value, argv, 3 << 3 | 3, app_load.entry,
                     stack_frame_addr.value + stack_size - 8,
                     &task.OSStackPointer());
-  // #@@range_end(use_stack_size)
 
   task.Files().clear();
   task.FileMaps().clear();
