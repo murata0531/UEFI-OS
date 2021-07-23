@@ -143,7 +143,8 @@ Error FreePML4(Task& current_task) {
   return FreePageMap(reinterpret_cast<PageMapEntry*>(cr3));
 }
 
-void ListAllEntries(Terminal* term, uint32_t dir_cluster) {
+// #@@range_begin(list_all_entries)
+void ListAllEntries(FileDescriptor& fd, uint32_t dir_cluster) {
   const auto kEntriesPerCluster =
     fat::bytes_per_cluster / sizeof(fat::DirectoryEntry);
 
@@ -161,13 +162,13 @@ void ListAllEntries(Terminal* term, uint32_t dir_cluster) {
 
       char name[13];
       fat::FormatName(dir[i], name);
-      term->Print(name);
-      term->Print("\n");
+      PrintToFD(fd, "%s\n", name);
     }
 
     dir_cluster = fat::NextCluster(dir_cluster);
   }
 }
+// #@@range_end(list_all_entries)
 
 WithError<AppLoadInfo> LoadApp(fat::DirectoryEntry& file_entry, Task& task) {
   PageMapEntry* temp_pml4;
@@ -213,12 +214,14 @@ WithError<AppLoadInfo> LoadApp(fat::DirectoryEntry& file_entry, Task& task) {
 
 std::map<fat::DirectoryEntry*, AppLoadInfo>* app_loads;
 
+// #@@range_begin(term_ctor)
 Terminal::Terminal(Task& task, bool show_window)
     : task_{task}, show_window_{show_window} {
   for (int i = 0; i < files_.size(); ++i) {
     files_[i] = std::make_shared<TerminalFileDescriptor>(*this);
   }
   if (show_window) {
+// #@@range_end(term_ctor)
     window_ = std::make_shared<ToplevelWindow>(
         kColumns * 8 + 8 + ToplevelWindow::kMarginX,
         kRows * 16 + 8 + ToplevelWindow::kMarginY,
@@ -518,7 +521,6 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
   return FreePML4(task);
 }
 
-// #@@range_begin(print_char)
 void Terminal::Print(char32_t c) {
   if (!show_window_) {
     return;
@@ -549,9 +551,7 @@ void Terminal::Print(char32_t c) {
     cursor_.x += 2;
   }
 }
-// #@@range_end(print_char)
 
-// #@@range_begin(print_str)
 void Terminal::Print(const char* s, std::optional<size_t> len) {
   const auto cursor_before = CalcCursorPos();
   DrawCursor(false);
@@ -566,7 +566,6 @@ void Terminal::Print(const char* s, std::optional<size_t> len) {
   }
 
   DrawCursor(true);
-// #@@range_end(print_str)
   const auto cursor_after = CalcCursorPos();
 
   Vector2D<int> draw_pos{ToplevelWindow::kTopLeftMargin.x, cursor_before.y};
@@ -576,7 +575,7 @@ void Terminal::Print(const char* s, std::optional<size_t> len) {
   Rectangle<int> draw_area{draw_pos, draw_size};
 
   Message msg = MakeLayerMessage(
-      task_id_, LayerID(), LayerOperation::DrawArea, draw_area);
+      task_.ID(), LayerID(), LayerOperation::DrawArea, draw_area);
   __asm__("cli");
   task_manager->SendMessage(1, msg);
   __asm__("sti");
@@ -614,7 +613,7 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
 
   __asm__("cli");
   Task& task = task_manager->CurrentTask();
-  Terminal* terminal = new Terminal{task_id, show_window};
+  Terminal* terminal = new Terminal{task, show_window};
   if (show_window) {
     layer_manager->Move(terminal->LayerID(), {100, 200});
     layer_task_map->insert(std::make_pair(terminal->LayerID(), task_id));
@@ -682,8 +681,8 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
   }
 }
 
-TerminalFileDescriptor::TerminalFileDescriptor(Task& task, Terminal& term)
-    : task_{task}, term_{term} {
+TerminalFileDescriptor::TerminalFileDescriptor(Terminal& term)
+    : term_{term} {
 }
 
 size_t TerminalFileDescriptor::Read(void* buf, size_t len) {
@@ -691,9 +690,9 @@ size_t TerminalFileDescriptor::Read(void* buf, size_t len) {
 
   while (true) {
     __asm__("cli");
-    auto msg = task_.ReceiveMessage();
+    auto msg = term_.UnderlyingTask().ReceiveMessage();
     if (!msg) {
-      task_.Sleep();
+      term_.UnderlyingTask().Sleep();
       continue;
     }
     __asm__("sti");
