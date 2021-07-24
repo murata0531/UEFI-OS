@@ -336,6 +336,7 @@ void Terminal::ExecuteLine() {
   }
 
   auto original_stdout = files_[1];
+  int exit_code = 0;
 
   if (redir_char) {
     *redir_char = 0;
@@ -458,8 +459,9 @@ void Terminal::ExecuteLine() {
     }
   }
 
-// #@@range_begin(execute_line_finish)
+  last_exit_code_ = exit_code;
   files_[1] = original_stdout;
+  
 }
 // #@@range_end(execute_line_finish)
 
