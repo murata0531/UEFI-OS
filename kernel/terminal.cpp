@@ -468,20 +468,21 @@ void Terminal::ExecuteLine() {
 }
 // #@@range_end(execute_line_finish)
 
-Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
-                            char* command, char* first_arg) {
+WithError<int> Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
+                                     char* command, char* first_arg) {
   __asm__("cli");
   auto& task = task_manager->CurrentTask();
   __asm__("sti");
 
   auto [ app_load, err ] = LoadApp(file_entry, task);
   if (err) {
-    return err;
+    return { 0, err };
   }
+// #@@range_end(exec_file)
 
   LinearAddress4Level args_frame_addr{0xffff'ffff'ffff'f000};
   if (auto err = SetupPageMaps(args_frame_addr, 1)) {
-    return err;
+    return { 0, err };
   }
   auto argv = reinterpret_cast<char**>(args_frame_addr.value);
   int argv_len = 32; // argv = 8x32 = 256 bytes
@@ -489,20 +490,18 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
   int argbuf_len = 4096 - sizeof(char**) * argv_len;
   auto argc = MakeArgVector(command, first_arg, argv, argv_len, argbuf, argbuf_len);
   if (argc.error) {
-    return argc.error;
+    return { 0, argc.error };
   }
 
   const int stack_size = 8 * 4096;
   LinearAddress4Level stack_frame_addr{0xffff'ffff'ffff'f000 - stack_size};
   if (auto err = SetupPageMaps(stack_frame_addr, stack_size / 4096)) {
-    return err;
+    return { 0, err };
   }
 
-  // #@@range_begin(setup_app_files)
   for (int i = 0; i < files_.size(); ++i) {
     task.Files().push_back(files_[i]);
   }
-  // #@@range_end(setup_app_files)
 
   const uint64_t elf_next_page =
     (app_load.vaddr_end + 4095) & 0xffff'ffff'ffff'f000;
@@ -511,6 +510,7 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
 
   task.SetFileMapEnd(stack_frame_addr.value);
 
+// #@@range_begin(exec_file_finish)
   int ret = CallApp(argc.value, argv, 3 << 3 | 3, app_load.entry,
                     stack_frame_addr.value + stack_size - 8,
                     &task.OSStackPointer());
@@ -518,15 +518,12 @@ Error Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
   task.Files().clear();
   task.FileMaps().clear();
 
-  char s[64];
-  sprintf(s, "app exited. ret = %d\n", ret);
-  Print(s);
-
   if (auto err = CleanPageMaps(LinearAddress4Level{0xffff'8000'0000'0000})) {
-    return err;
+    return { ret, err };
   }
-  return FreePML4(task);
+  return { ret, FreePML4(task) };
 }
+// #@@range_end(exec_file_finish)
 
 void Terminal::Print(char32_t c) {
   if (!show_window_) {
