@@ -360,15 +360,17 @@ void Terminal::ExecuteLine() {
     files_[1] = std::make_shared<fat::FileDescriptor>(*file);
   }
 
-// #@@range_begin(echo_command)
   if (strcmp(command, "echo") == 0) {
-// #@@range_end(execute_line)
-    if (first_arg) {
+    if (first_arg && first_arg[0] == '$') {
+      if (strcmp(&first_arg[1], "?") == 0) {
+        PrintToFD(*files_[1], "%d", last_exit_code_);
+      }
+    } else if (first_arg) {
       PrintToFD(*files_[1], "%s", first_arg);
     }
     PrintToFD(*files_[1], "\n");
   } else if (strcmp(command, "clear") == 0) {
-// #@@range_end(echo_command)
+  // #@@range_end(echo_command)
     if (show_window_) {
       FillRectangle(*window_->InnerWriter(),
                     {4, 4}, {8*kColumns, 16*kRows}, {0, 0, 0});
