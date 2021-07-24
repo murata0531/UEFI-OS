@@ -410,11 +410,14 @@ void Terminal::ExecuteLine() {
     auto [ file_entry, post_slash ] = fat::FindFile(first_arg);
     if (!file_entry) {
       PrintToFD(*files_[2], "no such file: %s\n", first_arg);
+      exit_code = 1;
     } else if (file_entry->attr != fat::Attribute::kDirectory && post_slash) {
       char name[13];
       fat::FormatName(*file_entry, name);
       PrintToFD(*files_[2], "%s is not a directory\n", name);
+      exit_code = 1;
     } else {
+  // #@@range_end(cat_command)
       fat::FileDescriptor fd{*file_entry};
       char u8buf[5];
 
@@ -461,7 +464,7 @@ void Terminal::ExecuteLine() {
 
   last_exit_code_ = exit_code;
   files_[1] = original_stdout;
-  
+
 }
 // #@@range_end(execute_line_finish)
 
