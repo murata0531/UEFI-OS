@@ -774,3 +774,18 @@ size_t TerminalFileDescriptor::Write(const void* buf, size_t len) {
 size_t TerminalFileDescriptor::Load(void* buf, size_t len, size_t offset) {
   return 0;
 }
+
+size_t PipeDescriptor::Write(const void* buf, size_t len) {
+  auto bufc = reinterpret_cast<const char*>(buf);
+  Message msg{Message::kPipe};
+  size_t sent_bytes = 0;
+  while (sent_bytes < len) {
+    msg.arg.pipe.len = std::min(len - sent_bytes, sizeof(msg.arg.pipe.data));
+    memcpy(msg.arg.pipe.data, &bufc[sent_bytes], msg.arg.pipe.len);
+    sent_bytes += msg.arg.pipe.len;
+    __asm__("cli");
+    task_.SendMessage(msg);
+    __asm__("sti");
+  }
+  return len;
+}
