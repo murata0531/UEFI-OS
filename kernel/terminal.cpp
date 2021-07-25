@@ -658,12 +658,15 @@ Rectangle<int> Terminal::HistoryUpDown(int direction) {
 }
 
 void TaskTerminal(uint64_t task_id, int64_t data) {
-  const char* command_line = reinterpret_cast<char*>(data);
-  const bool show_window = command_line == nullptr;
+  const auto term_desc = reinterpret_cast<TerminalDescriptor*>(data);
+  bool show_window = true;
+  if (term_desc) {
+    show_window = term_desc->show_window;
+  }
 
   __asm__("cli");
   Task& task = task_manager->CurrentTask();
-  Terminal* terminal = new Terminal{task, show_window};
+  Terminal* terminal = new Terminal{task, term_desc};
   if (show_window) {
     layer_manager->Move(terminal->LayerID(), {100, 200});
     layer_task_map->insert(std::make_pair(terminal->LayerID(), task_id));
@@ -671,12 +674,20 @@ void TaskTerminal(uint64_t task_id, int64_t data) {
   }
   __asm__("sti");
 
-  if (command_line) {
-    for (int i = 0; command_line[i] != '\0'; ++i) {
-      terminal->InputKey(0, 0, command_line[i]);
+  if (term_desc && !term_desc->command_line.empty()) {
+    for (int i = 0; i < term_desc->command_line.length(); ++i) {
+      terminal->InputKey(0, 0, term_desc->command_line[i]);
     }
     terminal->InputKey(0, 0, '\n');
   }
+
+  if (term_desc && term_desc->exit_after_command) {
+    delete term_desc;
+    __asm__("cli");
+    task_manager->Finish(terminal->LastExitCode());
+    __asm__("sti");
+  }
+// #@@range_end(task_term)
 
   auto add_blink_timer = [task_id](unsigned long t){
     timer_manager->AddTimer(Timer{t + static_cast<int>(kTimerFreq * 0.5),
