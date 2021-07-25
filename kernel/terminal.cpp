@@ -775,6 +775,45 @@ size_t TerminalFileDescriptor::Load(void* buf, size_t len, size_t offset) {
   return 0;
 }
 
+size_t PipeDescriptor::Read(void* buf, size_t len) {
+  if (len_ > 0) {
+    const size_t copy_bytes = std::min(len_, len);
+    memcpy(buf, data_, copy_bytes);
+    len_ -= copy_bytes;
+    memmove(data_, &data_[copy_bytes], len_);
+    return copy_bytes;
+  }
+
+  if (closed_) {
+    return 0;
+  }
+
+  while (true) {
+    __asm__("cli");
+    auto msg = task_.ReceiveMessage();
+    if (!msg) {
+      task_.Sleep();
+      continue;
+    }
+    __asm__("sti");
+
+    if (msg->type != Message::kPipe) {
+      continue;
+    }
+
+    if (msg->arg.pipe.len == 0) {
+      closed_ = true;
+      return 0;
+    }
+
+    const size_t copy_bytes = std::min<size_t>(msg->arg.pipe.len, len);
+    memcpy(buf, msg->arg.pipe.data, copy_bytes);
+    len_ = msg->arg.pipe.len - copy_bytes;
+    memcpy(data_, &msg->arg.pipe.data[copy_bytes], len_);
+    return copy_bytes;
+  }
+}
+
 size_t PipeDescriptor::Write(const void* buf, size_t len) {
   auto bufc = reinterpret_cast<const char*>(buf);
   Message msg{Message::kPipe};
