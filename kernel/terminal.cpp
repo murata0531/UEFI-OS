@@ -321,19 +321,20 @@ void Terminal::Scroll1() {
                 {4, 4 + 16*cursor_.y}, {8*kColumns, 16}, {0, 0, 0});
 }
 
+// #@@range_begin(exec_line)
 void Terminal::ExecuteLine() {
   char* command = &linebuf_[0];
   char* first_arg = strchr(&linebuf_[0], ' ');
   char* redir_char = strchr(&linebuf_[0], '>');
+  char* pipe_char = strchr(&linebuf_[0], '|');
+// #@@range_end(exec_line)
   if (first_arg) {
     *first_arg = 0;
     ++first_arg;
   }
 
-  // #@@range_begin(exit_code_var)
   auto original_stdout = files_[1];
   int exit_code = 0;
-  // #@@range_end(exit_code_var)
 
   if (redir_char) {
     *redir_char = 0;
@@ -358,7 +359,32 @@ void Terminal::ExecuteLine() {
     files_[1] = std::make_shared<fat::FileDescriptor>(*file);
   }
 
-  // #@@range_begin(echo_command)
+  // #@@range_begin(piping)
+  std::shared_ptr<PipeDescriptor> pipe_fd;
+  uint64_t subtask_id = 0;
+
+  if (pipe_char) {
+    *pipe_char = 0;
+    char* subcommand = &pipe_char[1];
+    while (isspace(*subcommand)) {
+      ++subcommand;
+    }
+
+    auto& subtask = task_manager->NewTask();
+    pipe_fd = std::make_shared<PipeDescriptor>(subtask);
+    auto term_desc = new TerminalDescriptor{
+      subcommand, true, false,
+      { pipe_fd, files_[1], files_[2] }
+    };
+    files_[1] = pipe_fd;
+
+    subtask_id = subtask
+      .InitContext(TaskTerminal, reinterpret_cast<int64_t>(term_desc))
+      .Wakeup()
+      .ID();
+  }
+  // #@@range_end(piping)
+
   if (strcmp(command, "echo") == 0) {
     if (first_arg && first_arg[0] == '$') {
       if (strcmp(&first_arg[1], "?") == 0) {
@@ -369,7 +395,6 @@ void Terminal::ExecuteLine() {
     }
     PrintToFD(*files_[1], "\n");
   } else if (strcmp(command, "clear") == 0) {
-  // #@@range_end(echo_command)
     if (show_window_) {
       FillRectangle(*window_->InnerWriter(),
                     {4, 4}, {8*kColumns, 16*kRows}, {0, 0, 0});
@@ -405,7 +430,6 @@ void Terminal::ExecuteLine() {
         }
       }
     }
-  // #@@range_begin(cat_command)
   } else if (strcmp(command, "cat") == 0) {
     auto [ file_entry, post_slash ] = fat::FindFile(first_arg);
     if (!file_entry) {
@@ -417,7 +441,6 @@ void Terminal::ExecuteLine() {
       PrintToFD(*files_[2], "%s is not a directory\n", name);
       exit_code = 1;
     } else {
-  // #@@range_end(cat_command)
       fat::FileDescriptor fd{*file_entry};
       char u8buf[5];
 
@@ -436,10 +459,15 @@ void Terminal::ExecuteLine() {
       }
       DrawCursor(true);
     }
+    // #@@range_begin(noterm_term_desc)
   } else if (strcmp(command, "noterm") == 0) {
+    auto term_desc = new TerminalDescriptor{
+      first_arg, true, false, files_
+    };
     task_manager->NewTask()
-      .InitContext(TaskTerminal, reinterpret_cast<int64_t>(first_arg))
+      .InitContext(TaskTerminal, reinterpret_cast<int64_t>(term_desc))
       .Wakeup();
+    // #@@range_end(noterm_term_desc)
   } else if (strcmp(command, "memstat") == 0) {
     const auto p_stat = memory_manager->Stat();
     PrintToFD(*files_[1], "Phys used : %lu frames (%llu MiB)\n",
@@ -459,7 +487,6 @@ void Terminal::ExecuteLine() {
       PrintToFD(*files_[2], "%s is not a directory\n", name);
       exit_code = 1;
     } else {
-      // #@@range_begin(call_exec_file)
       auto [ ec, err ] = ExecuteFile(*file_entry, command, first_arg);
       if (err) {
         PrintToFD(*files_[2], "failed to exec file: %s\n", err.Name());
@@ -467,17 +494,26 @@ void Terminal::ExecuteLine() {
       } else {
         exit_code = ec;
       }
-      // #@@range_end(call_exec_file)
     }
   }
 
-// #@@range_begin(exec_line_finish)
+// #@@range_begin(finish_subtask)
+  if (pipe_fd) {
+    pipe_fd->FinishWrite();
+    __asm__("cli");
+    auto [ ec, err ] = task_manager->WaitFinish(subtask_id);
+    __asm__("sti");
+    if (err) {
+      Log(kWarn, "failed to wait finish: %s\n", err.Name());
+    }
+    exit_code = ec;
+  }
+
   last_exit_code_ = exit_code;
   files_[1] = original_stdout;
 }
-// #@@range_end(exec_line_finish)
+// #@@range_end(finish_subtask)
 
-// #@@range_begin(exec_file)
 WithError<int> Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
                                      char* command, char* first_arg) {
   __asm__("cli");
