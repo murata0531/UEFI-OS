@@ -12,6 +12,7 @@
 #include "paging.hpp"
 #include "timer.hpp"
 #include "keyboard.hpp"
+#include "logger.hpp"
 
 namespace {
 
@@ -212,12 +213,23 @@ WithError<AppLoadInfo> LoadApp(fat::DirectoryEntry& file_entry, Task& task) {
 
 std::map<fat::DirectoryEntry*, AppLoadInfo>* app_loads;
 
-Terminal::Terminal(Task& task, bool show_window)
-    : task_{task}, show_window_{show_window} {
-  for (int i = 0; i < files_.size(); ++i) {
-    files_[i] = std::make_shared<TerminalFileDescriptor>(*this);
+// #@@range_begin(term_ctor)
+Terminal::Terminal(Task& task, const TerminalDescriptor* term_desc)
+    : task_{task} {
+  if (term_desc) {
+    show_window_ = term_desc->show_window;
+    for (int i = 0; i < files_.size(); ++i) {
+      files_[i] = term_desc->files[i];
+    }
+  } else {
+    show_window_ = true;
+    for (int i = 0; i < files_.size(); ++i) {
+      files_[i] = std::make_shared<TerminalFileDescriptor>(*this);
+    }
   }
-  if (show_window) {
+
+  if (show_window_) {
+// #@@range_end(term_ctor)
     window_ = std::make_shared<ToplevelWindow>(
         kColumns * 8 + 8 + ToplevelWindow::kMarginX,
         kRows * 16 + 8 + ToplevelWindow::kMarginY,
@@ -524,7 +536,6 @@ WithError<int> Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
   if (err) {
     return { 0, err };
   }
-// #@@range_end(exec_file)
 
   LinearAddress4Level args_frame_addr{0xffff'ffff'ffff'f000};
   if (auto err = SetupPageMaps(args_frame_addr, 1)) {
@@ -556,7 +567,6 @@ WithError<int> Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
 
   task.SetFileMapEnd(stack_frame_addr.value);
 
-// #@@range_begin(exec_file_finish)
   int ret = CallApp(argc.value, argv, 3 << 3 | 3, app_load.entry,
                     stack_frame_addr.value + stack_size - 8,
                     &task.OSStackPointer());
@@ -569,7 +579,6 @@ WithError<int> Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
   }
   return { ret, FreePML4(task) };
 }
-// #@@range_end(exec_file_finish)
 
 void Terminal::Print(char32_t c) {
   if (!show_window_) {
@@ -657,6 +666,7 @@ Rectangle<int> Terminal::HistoryUpDown(int direction) {
   return draw_area;
 }
 
+// #@@range_begin(task_term)
 void TaskTerminal(uint64_t task_id, int64_t data) {
   const auto term_desc = reinterpret_cast<TerminalDescriptor*>(data);
   bool show_window = true;
@@ -786,6 +796,12 @@ size_t TerminalFileDescriptor::Load(void* buf, size_t len, size_t offset) {
   return 0;
 }
 
+// #@@range_begin(pipe_fd_ctor)
+PipeDescriptor::PipeDescriptor(Task& task) : task_{task} {
+}
+// #@@range_end(pipe_fd_ctor)
+
+// #@@range_begin(pipe_fd_read)
 size_t PipeDescriptor::Read(void* buf, size_t len) {
   if (len_ > 0) {
     const size_t copy_bytes = std::min(len_, len);
@@ -824,7 +840,9 @@ size_t PipeDescriptor::Read(void* buf, size_t len) {
     return copy_bytes;
   }
 }
+// #@@range_end(pipe_fd_read)
 
+// #@@range_begin(pipe_fd_write)
 size_t PipeDescriptor::Write(const void* buf, size_t len) {
   auto bufc = reinterpret_cast<const char*>(buf);
   Message msg{Message::kPipe};
@@ -839,7 +857,9 @@ size_t PipeDescriptor::Write(const void* buf, size_t len) {
   }
   return len;
 }
+// #@@range_end(pipe_fd_write)
 
+// #@@range_begin(pipe_fd_finishwrite)
 void PipeDescriptor::FinishWrite() {
   Message msg{Message::kPipe};
   msg.arg.pipe.len = 0;
@@ -847,3 +867,4 @@ void PipeDescriptor::FinishWrite() {
   task_.SendMessage(msg);
   __asm__("sti");
 }
+// #@@range_end(pipe_fd_finishwrite)
