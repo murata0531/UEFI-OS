@@ -143,7 +143,6 @@ Error FreePML4(Task& current_task) {
   return FreePageMap(reinterpret_cast<PageMapEntry*>(cr3));
 }
 
-// #@@range_begin(list_all_entries)
 void ListAllEntries(FileDescriptor& fd, uint32_t dir_cluster) {
   const auto kEntriesPerCluster =
     fat::bytes_per_cluster / sizeof(fat::DirectoryEntry);
@@ -168,7 +167,6 @@ void ListAllEntries(FileDescriptor& fd, uint32_t dir_cluster) {
     dir_cluster = fat::NextCluster(dir_cluster);
   }
 }
-// #@@range_end(list_all_entries)
 
 WithError<AppLoadInfo> LoadApp(fat::DirectoryEntry& file_entry, Task& task) {
   PageMapEntry* temp_pml4;
@@ -214,14 +212,12 @@ WithError<AppLoadInfo> LoadApp(fat::DirectoryEntry& file_entry, Task& task) {
 
 std::map<fat::DirectoryEntry*, AppLoadInfo>* app_loads;
 
-// #@@range_begin(term_ctor)
 Terminal::Terminal(Task& task, bool show_window)
     : task_{task}, show_window_{show_window} {
   for (int i = 0; i < files_.size(); ++i) {
     files_[i] = std::make_shared<TerminalFileDescriptor>(*this);
   }
   if (show_window) {
-// #@@range_end(term_ctor)
     window_ = std::make_shared<ToplevelWindow>(
         kColumns * 8 + 8 + ToplevelWindow::kMarginX,
         kRows * 16 + 8 + ToplevelWindow::kMarginY,
@@ -325,7 +321,6 @@ void Terminal::Scroll1() {
                 {4, 4 + 16*cursor_.y}, {8*kColumns, 16}, {0, 0, 0});
 }
 
-// #@@range_begin(execute_line)
 void Terminal::ExecuteLine() {
   char* command = &linebuf_[0];
   char* first_arg = strchr(&linebuf_[0], ' ');
@@ -335,8 +330,10 @@ void Terminal::ExecuteLine() {
     ++first_arg;
   }
 
+  // #@@range_begin(exit_code_var)
   auto original_stdout = files_[1];
   int exit_code = 0;
+  // #@@range_end(exit_code_var)
 
   if (redir_char) {
     *redir_char = 0;
@@ -361,6 +358,7 @@ void Terminal::ExecuteLine() {
     files_[1] = std::make_shared<fat::FileDescriptor>(*file);
   }
 
+  // #@@range_begin(echo_command)
   if (strcmp(command, "echo") == 0) {
     if (first_arg && first_arg[0] == '$') {
       if (strcmp(&first_arg[1], "?") == 0) {
@@ -393,6 +391,7 @@ void Terminal::ExecuteLine() {
       auto [ dir, post_slash ] = fat::FindFile(first_arg);
       if (dir == nullptr) {
         PrintToFD(*files_[2], "No such file or directory: %s\n", first_arg);
+        exit_code = 1;
       } else if (dir->attr == fat::Attribute::kDirectory) {
         ListAllEntries(*files_[1], dir->FirstCluster());
       } else {
@@ -400,12 +399,13 @@ void Terminal::ExecuteLine() {
         fat::FormatName(*dir, name);
         if (post_slash) {
           PrintToFD(*files_[2], "%s is not a directory\n", name);
+          exit_code = 1;
         } else {
           PrintToFD(*files_[1], "%s\n", name);
         }
       }
     }
-// #@@range_begin(cat_command)
+  // #@@range_begin(cat_command)
   } else if (strcmp(command, "cat") == 0) {
     auto [ file_entry, post_slash ] = fat::FindFile(first_arg);
     if (!file_entry) {
@@ -437,7 +437,6 @@ void Terminal::ExecuteLine() {
       DrawCursor(true);
     }
   } else if (strcmp(command, "noterm") == 0) {
-// #@@range_end(cat_command)
     task_manager->NewTask()
       .InitContext(TaskTerminal, reinterpret_cast<int64_t>(first_arg))
       .Wakeup();
@@ -453,21 +452,32 @@ void Terminal::ExecuteLine() {
     auto [ file_entry, post_slash ] = fat::FindFile(command);
     if (!file_entry) {
       PrintToFD(*files_[2], "no such command: %s\n", command);
+      exit_code = 1;
     } else if (file_entry->attr != fat::Attribute::kDirectory && post_slash) {
       char name[13];
       fat::FormatName(*file_entry, name);
       PrintToFD(*files_[2], "%s is not a directory\n", name);
-    } else if (auto err = ExecuteFile(*file_entry, command, first_arg)) {
-      PrintToFD(*files_[2], "failed to exec file: %s\n", err.Name());
+      exit_code = 1;
+    } else {
+      // #@@range_begin(call_exec_file)
+      auto [ ec, err ] = ExecuteFile(*file_entry, command, first_arg);
+      if (err) {
+        PrintToFD(*files_[2], "failed to exec file: %s\n", err.Name());
+        exit_code = -ec;
+      } else {
+        exit_code = ec;
+      }
+      // #@@range_end(call_exec_file)
     }
   }
 
+// #@@range_begin(exec_line_finish)
   last_exit_code_ = exit_code;
   files_[1] = original_stdout;
-
 }
-// #@@range_end(execute_line_finish)
+// #@@range_end(exec_line_finish)
 
+// #@@range_begin(exec_file)
 WithError<int> Terminal::ExecuteFile(fat::DirectoryEntry& file_entry,
                                      char* command, char* first_arg) {
   __asm__("cli");
