@@ -828,3 +828,11 @@ size_t PipeDescriptor::Write(const void* buf, size_t len) {
   }
   return len;
 }
+
+void PipeDescriptor::FinishWrite() {
+  Message msg{Message::kPipe};
+  msg.arg.pipe.len = 0;
+  __asm__("cli");
+  task_.SendMessage(msg);
+  __asm__("sti");
+}
