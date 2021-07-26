@@ -760,6 +760,7 @@ size_t TerminalFileDescriptor::Read(void* buf, size_t len) {
   char* bufc = reinterpret_cast<char*>(buf);
 
   while (true) {
+// #@@range_end(term_fd_read)
     __asm__("cli");
     auto msg = term_.UnderlyingTask().ReceiveMessage();
     if (!msg) {
@@ -781,8 +782,10 @@ size_t TerminalFileDescriptor::Read(void* buf, size_t len) {
       continue;
     }
 
+// #@@range_begin(term_fd_read_readraw)
     bufc[0] = msg->arg.keyboard.ascii;
     term_.Print(bufc, 1);
+    term_.Redraw();
     return 1;
   }
 }
