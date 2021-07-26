@@ -453,25 +453,19 @@ void Terminal::ExecuteLine() {
       PrintToFD(*files_[2], "%s is not a directory\n", name);
       exit_code = 1;
     } else {
+      // #@@range_begin(cat_command)
       fat::FileDescriptor fd{*file_entry};
-      char u8buf[5];
-
+      char u8buf[1024];
       DrawCursor(false);
       while (true) {
-        if (fd.Read(&u8buf[0], 1) != 1) {
+        if (ReadDelim(fd, '\n', u8buf, sizeof(u8buf)) == 0) {
           break;
         }
-        const int u8_remain = CountUTF8Size(u8buf[0]) - 1;
-        if (u8_remain > 0 && fd.Read(&u8buf[1], u8_remain) != u8_remain) {
-          break;
-        }
-        u8buf[u8_remain + 1] = 0;
-
         PrintToFD(*files_[1], "%s", u8buf);
       }
       DrawCursor(true);
+      // #@@range_end(cat_command)
     }
-    // #@@range_begin(noterm_term_desc)
   } else if (strcmp(command, "noterm") == 0) {
     auto term_desc = new TerminalDescriptor{
       first_arg, true, false, files_
