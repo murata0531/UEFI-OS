@@ -31,6 +31,7 @@ extern "C" void main(int argc, char** argv) {
   };
 
   std::sort(lines.begin(), lines.end(), comp);
+  printf("\n");
   for (auto& line : lines) {
     printf("%s", line.c_str());
   }
