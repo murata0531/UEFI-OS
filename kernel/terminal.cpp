@@ -640,6 +640,17 @@ void Terminal::Print(const char* s, std::optional<size_t> len) {
   __asm__("sti");
 }
 
+void Terminal::Redraw() {
+  Rectangle<int> draw_area{ToplevelWindow::kTopLeftMargin,
+                           window_->InnerSize()};
+
+  Message msg = MakeLayerMessage(
+      task_.ID(), LayerID(), LayerOperation::DrawArea, draw_area);
+  __asm__("cli");
+  task_manager->SendMessage(1, msg);
+  __asm__("sti");
+}
+
 Rectangle<int> Terminal::HistoryUpDown(int direction) {
   if (direction == -1 && cmd_history_index_ >= 0) {
     --cmd_history_index_;
