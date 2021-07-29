@@ -73,6 +73,18 @@ namespace {
       }
     }
   }
+
+  void SendCloseMessage() {
+    const auto [ layer, task_id ] = FindActiveLayerTask();
+    if (!layer || !task_id) {
+      return;
+    }
+
+    Message msg{Message::kWindowClose};
+    msg.arg.window_close.layer_id = layer->ID();
+    task_manager->SendMessage(task_id, msg);
+  }
+  
 }
 
 void DrawMouseCursor(PixelWriter* pixel_writer, Vector2D<int> position) {
