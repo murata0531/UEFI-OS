@@ -99,6 +99,10 @@ void Window::Move(Vector2D<int> dst_pos, const Rectangle<int>& src) {
   shadow_buffer_.Move(dst_pos, src);
 }
 
+WindowRegion Window::GetWindowRegion(Vector2D<int> pos) {
+  return WindowRegion::kOther;
+}
+
 ToplevelWindow::ToplevelWindow(int width, int height, PixelFormat shadow_format,
                                const std::string& title)
     : Window{width, height, shadow_format}, title_{title} {
