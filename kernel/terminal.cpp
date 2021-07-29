@@ -209,6 +209,31 @@ WithError<AppLoadInfo> LoadApp(fat::DirectoryEntry& file_entry, Task& task) {
   return { app_load, err };
 }
 
+// #@@range_begin(find_command)
+fat::DirectoryEntry* FindCommand(const char* command,
+                                 unsigned long dir_cluster = 0) {
+  auto file_entry = fat::FindFile(command, dir_cluster);
+  if (file_entry.first != nullptr &&
+      (file_entry.first->attr == fat::Attribute::kDirectory ||
+       file_entry.second)) {
+    return nullptr;
+  } else if (file_entry.first) {
+    return file_entry.first;
+  }
+
+  if (dir_cluster != 0 || strchr(command, '/') != nullptr) {
+    return nullptr;
+  }
+
+  auto apps_entry = fat::FindFile("apps");
+  if (apps_entry.first == nullptr ||
+      apps_entry.first->attr != fat::Attribute::kDirectory) {
+    return nullptr;
+  }
+  return FindCommand(command, apps_entry.first->FirstCluster());
+}
+// #@@range_end(find_command)
+
 } // namespace
 
 std::map<fat::DirectoryEntry*, AppLoadInfo>* app_loads;
@@ -447,7 +472,6 @@ void Terminal::ExecuteLine() {
       PrintToFD(*files_[2], "%s is not a directory\n", name);
       exit_code = 1;
     } else {
-      // #@@range_begin(cat_command)
       fat::FileDescriptor fd{*file_entry};
       char u8buf[1024];
       DrawCursor(false);
@@ -458,7 +482,6 @@ void Terminal::ExecuteLine() {
         PrintToFD(*files_[1], "%s", u8buf);
       }
       DrawCursor(true);
-      // #@@range_end(cat_command)
     }
   } else if (strcmp(command, "noterm") == 0) {
     auto term_desc = new TerminalDescriptor{
@@ -475,18 +498,15 @@ void Terminal::ExecuteLine() {
     PrintToFD(*files_[1], "Phys total: %lu frames (%llu MiB)\n",
         p_stat.total_frames,
         p_stat.total_frames * kBytesPerFrame / 1024 / 1024);
+  // #@@range_begin(exec_command)
   } else if (command[0] != 0) {
-    auto [ file_entry, post_slash ] = fat::FindFile(command);
+    auto file_entry = FindCommand(command);
     if (!file_entry) {
       PrintToFD(*files_[2], "no such command: %s\n", command);
       exit_code = 1;
-    } else if (file_entry->attr != fat::Attribute::kDirectory && post_slash) {
-      char name[13];
-      fat::FormatName(*file_entry, name);
-      PrintToFD(*files_[2], "%s is not a directory\n", name);
-      exit_code = 1;
     } else {
       auto [ ec, err ] = ExecuteFile(*file_entry, command, first_arg);
+  // #@@range_end(exec_command)
       if (err) {
         PrintToFD(*files_[2], "failed to exec file: %s\n", err.Name());
         exit_code = -ec;
@@ -625,7 +645,6 @@ void Terminal::Print(const char* s, std::optional<size_t> len) {
   __asm__("sti");
 }
 
-// #@@range_begin(term_redraw)
 void Terminal::Redraw() {
   Rectangle<int> draw_area{ToplevelWindow::kTopLeftMargin,
                            window_->InnerSize()};
@@ -636,7 +655,6 @@ void Terminal::Redraw() {
   task_manager->SendMessage(1, msg);
   __asm__("sti");
 }
-// #@@range_end(term_redraw)
 
 Rectangle<int> Terminal::HistoryUpDown(int direction) {
   if (direction == -1 && cmd_history_index_ >= 0) {
@@ -752,12 +770,10 @@ TerminalFileDescriptor::TerminalFileDescriptor(Terminal& term)
     : term_{term} {
 }
 
-// #@@range_begin(term_fd_read)
 size_t TerminalFileDescriptor::Read(void* buf, size_t len) {
   char* bufc = reinterpret_cast<char*>(buf);
 
   while (true) {
-// #@@range_end(term_fd_read)
     __asm__("cli");
     auto msg = term_.UnderlyingTask().ReceiveMessage();
     if (!msg) {
@@ -779,22 +795,18 @@ size_t TerminalFileDescriptor::Read(void* buf, size_t len) {
       continue;
     }
 
-// #@@range_begin(term_fd_read_readraw)
     bufc[0] = msg->arg.keyboard.ascii;
     term_.Print(bufc, 1);
     term_.Redraw();
     return 1;
   }
 }
-// #@@range_end(term_fd_read_readraw)
 
-// #@@range_begin(term_fd_write)
 size_t TerminalFileDescriptor::Write(const void* buf, size_t len) {
   term_.Print(reinterpret_cast<const char*>(buf), len);
   term_.Redraw();
   return len;
 }
-// #@@range_end(term_fd_write)
 
 size_t TerminalFileDescriptor::Load(void* buf, size_t len, size_t offset) {
   return 0;
