@@ -359,10 +359,14 @@ void Terminal::ExecuteLine() {
   char* first_arg = strchr(&linebuf_[0], ' ');
   char* redir_char = strchr(&linebuf_[0], '>');
   char* pipe_char = strchr(&linebuf_[0], '|');
+  // #@@range_begin(first_arg)
   if (first_arg) {
     *first_arg = 0;
-    ++first_arg;
+    do {
+      ++first_arg;
+    } while (isspace(*first_arg));
   }
+  // #@@range_end(first_arg)
 
   auto original_stdout = files_[1];
   int exit_code = 0;
@@ -393,10 +397,8 @@ void Terminal::ExecuteLine() {
   std::shared_ptr<PipeDescriptor> pipe_fd;
   uint64_t subtask_id = 0;
 
-  // #@@range_begin(pipe)
   if (pipe_char) {
     *pipe_char = 0;
-  // #@@range_end(pipe)
     char* subcommand = &pipe_char[1];
     while (isspace(*subcommand)) {
       ++subcommand;
@@ -410,14 +412,12 @@ void Terminal::ExecuteLine() {
     };
     files_[1] = pipe_fd;
 
-  // #@@range_begin(register_subtask_id)
     subtask_id = subtask
       .InitContext(TaskTerminal, reinterpret_cast<int64_t>(term_desc))
       .Wakeup()
       .ID();
     (*layer_task_map)[layer_id_] = subtask_id;
   }
-  // #@@range_end(register_subtask_id)
 
   if (strcmp(command, "echo") == 0) {
     if (first_arg && first_arg[0] == '$') {
@@ -464,22 +464,30 @@ void Terminal::ExecuteLine() {
         }
       }
     }
+  // #@@range_begin(cat_command)
   } else if (strcmp(command, "cat") == 0) {
-    auto [ file_entry, post_slash ] = fat::FindFile(first_arg);
-    if (!file_entry) {
-      PrintToFD(*files_[2], "no such file: %s\n", first_arg);
-      exit_code = 1;
-    } else if (file_entry->attr != fat::Attribute::kDirectory && post_slash) {
-      char name[13];
-      fat::FormatName(*file_entry, name);
-      PrintToFD(*files_[2], "%s is not a directory\n", name);
-      exit_code = 1;
+    std::shared_ptr<FileDescriptor> fd;
+    if (!first_arg || first_arg[0] == '\0') {
+      fd = files_[0];
     } else {
-      fat::FileDescriptor fd{*file_entry};
+      auto [ file_entry, post_slash ] = fat::FindFile(first_arg);
+      if (!file_entry) {
+        PrintToFD(*files_[2], "no such file: %s\n", first_arg);
+        exit_code = 1;
+      } else if (file_entry->attr != fat::Attribute::kDirectory && post_slash) {
+        char name[13];
+        fat::FormatName(*file_entry, name);
+        PrintToFD(*files_[2], "%s is not a directory\n", name);
+        exit_code = 1;
+      } else {
+        fd = std::make_shared<fat::FileDescriptor>(*file_entry);
+      }
+    }
+    if (fd) {
       char u8buf[1024];
       DrawCursor(false);
       while (true) {
-        if (ReadDelim(fd, '\n', u8buf, sizeof(u8buf)) == 0) {
+        if (ReadDelim(*fd, '\n', u8buf, sizeof(u8buf)) == 0) {
           break;
         }
         PrintToFD(*files_[1], "%s", u8buf);
@@ -487,6 +495,7 @@ void Terminal::ExecuteLine() {
       DrawCursor(true);
     }
   } else if (strcmp(command, "noterm") == 0) {
+  // #@@range_end(cat_command)
     auto term_desc = new TerminalDescriptor{
       first_arg, true, false, files_
     };
@@ -517,14 +526,12 @@ void Terminal::ExecuteLine() {
     }
   }
 
-  // #@@range_begin(restore_subtask_id)
   if (pipe_fd) {
     pipe_fd->FinishWrite();
     __asm__("cli");
     auto [ ec, err ] = task_manager->WaitFinish(subtask_id);
     (*layer_task_map)[layer_id_] = task_.ID();
     __asm__("sti");
-  // #@@range_end(restore_subtask_id)
     if (err) {
       Log(kWarn, "failed to wait finish: %s\n", err.Name());
     }
