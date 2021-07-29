@@ -113,6 +113,7 @@ class ToplevelWindow : public Window {
 
   virtual void Activate() override;
   virtual void Deactivate() override;
+  virtual WindowRegion GetWindowRegion(Vector2D<int> pos);
 
   InnerAreaWriter* InnerWriter() { return &inner_writer_; }
   Vector2D<int> InnerSize() const;
