@@ -1,5 +1,9 @@
 # UEFI-OS
 
+## OSについての基礎知識
+
+https://hackmd.io/imuvwGTJQ3-3YkBT0Zh4Qw
+
 ## ファイル構成
 
 - MikanLoaderPkg
